@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Animated, Easing, KeyboardAvoidingView, Platform, ScrollView,
+  Animated, Easing, KeyboardAvoidingView, Platform, ScrollView, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
@@ -24,20 +24,16 @@ function getStyles(C: Colors) {
       marginBottom: 40,
     },
     logoBadge: {
-      width: 88,
-      height: 88,
+      width: 120,
+      height: 120,
       borderRadius: 26,
-      backgroundColor: C.accent,
-      alignItems: 'center',
-      justifyContent: 'center',
       marginBottom: 20,
-      shadowColor: C.accent,
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.28,
-      shadowRadius: 22,
-      elevation: 10,
+      shadowColor: '#152238',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.15,
+      shadowRadius: 20,
+      elevation: 8,
     },
-    badgeMonogram: { fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: 1 },
     studioName: {
       fontSize: 26,
       fontWeight: '800',
@@ -369,9 +365,11 @@ export function LoginScreen({ onLogin }: Props) {
 
           {/* Brand Header */}
           <View style={styles.brand}>
-            <View style={styles.logoBadge}>
-              <Text style={styles.badgeMonogram}>PK</Text>
-            </View>
+            <Image
+              source={require('../../assets/icon.png')}
+              style={styles.logoBadge}
+              resizeMode="contain"
+            />
             <Text style={styles.studioName}>PK-Fussballschule</Text>
             <Text style={styles.studioCity}>Rhein-Main</Text>
           </View>
