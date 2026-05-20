@@ -159,7 +159,6 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
     const relevantIds = trainers
       .filter(t => t.trainer_specialty === neededSpecialty)
       .map(t => t.id);
-    const hasMatchingTrainer = relevantIds.length > 0;
 
     // Each matching schedule row is one trainer covering that time → +baseCapacity.
     const capacityByTime = new Map<string, number>();
@@ -169,12 +168,13 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
       }
     }
 
-    const allowedSlots = hasMatchingTrainer
-      ? SLOTS.filter(s => capacityByTime.has(s))
-      : SLOTS;
+    // Only slots actually covered by a matching trainer are bookable. When no
+    // trainer of the needed specialty is scheduled (e.g. a Torwart program with
+    // no Torwart trainer), this is empty → "keine Zeiten verfügbar", which also
+    // matches the server rule (book_with_token rejects trainer-less slots).
+    const allowedSlots = SLOTS.filter(s => capacityByTime.has(s));
 
-    const getSlotCapacity = (time: string): number =>
-      hasMatchingTrainer ? (capacityByTime.get(time) ?? 0) : baseCapacity;
+    const getSlotCapacity = (time: string): number => capacityByTime.get(time) ?? 0;
 
     return { relevantIds, allowedSlots, getSlotCapacity };
   }, [currentProgram, selProgram, selDate, trainers, trainerSchedules]);
