@@ -22,6 +22,8 @@ export function useAppointments(profile: Profile | null) {
   const userIdRef = useRef<string | null>(null);
   // Track IDs already handled by optimistic updates to prevent Realtime double-counting
   const optimisticallyHandledRef = useRef<Set<string>>(new Set());
+  // Same guard for cancellations (UPDATE confirmed→cancelled)
+  const optimisticallyHandledCancelRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let isMounted = true;
@@ -95,6 +97,10 @@ export function useAppointments(profile: Profile | null) {
         const old = payload.old as Appointment;
         setMyAppointments(prev => prev.map(a => a.id === appt.id ? appt : a));
         if (old.status === 'confirmed' && appt.status === 'cancelled') {
+          if (optimisticallyHandledCancelRef.current.has(appt.id)) {
+            optimisticallyHandledCancelRef.current.delete(appt.id);
+            return;
+          }
           setSlotCounts(prev => prev.map(s =>
             s.date === appt.date && s.time === appt.time && s.program === appt.program
               ? { ...s, booked: Math.max(0, s.booked - 1) } : s
@@ -241,6 +247,8 @@ export function useAppointments(profile: Profile | null) {
     setMyAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'cancelled' as const } : a));
 
     if (appt) {
+      // Register before optimistic update so Realtime UPDATE handler skips double-decrement
+      optimisticallyHandledCancelRef.current.add(id);
       setSlotCounts(prev => prev.map(s =>
         s.date === appt.date && s.time === appt.time && s.program === appt.program
           ? { ...s, booked: Math.max(0, s.booked - 1) } : s
