@@ -32,7 +32,16 @@ export function useTrainerSchedules() {
       if (t.data) setTrainers(t.data as TrainerWithSpecialty[]);
     });
 
-    load();
+    // Load only once an authenticated session exists. The trainer_schedules and
+    // trainer-profile RLS policies are restricted to the `authenticated` role,
+    // so a query fired on mount before the session is restored runs as `anon`
+    // and silently returns nothing — leaving the booking screen with no slots.
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return;
+      if (session?.user && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+        load();
+      }
+    });
 
     const channel = supabase
       .channel(`trainer-schedules-live-${Date.now()}`)
@@ -41,6 +50,7 @@ export function useTrainerSchedules() {
 
     return () => {
       isMounted = false;
+      authSub.unsubscribe();
       supabase.removeChannel(channel);
     };
   }, []);
