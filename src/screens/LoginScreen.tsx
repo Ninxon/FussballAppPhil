@@ -373,7 +373,7 @@ export function LoginScreen({ onLogin }: Props) {
               <Text style={styles.badgeMonogram}>PK</Text>
             </View>
             <Text style={styles.studioName}>PK-Fussballschule</Text>
-            <Text style={styles.studioCity}>Hattersheim am Main</Text>
+            <Text style={styles.studioCity}>Rhein-Main</Text>
           </View>
 
           {/* Form Card */}

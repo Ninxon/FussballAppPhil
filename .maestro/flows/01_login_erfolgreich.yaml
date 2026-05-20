@@ -6,7 +6,7 @@ name: "Login – Erfolgreicher Login"
 
 - assertVisible: "PK-Fußballschule"
 - assertVisible: "Willkommen zurück"
-- assertVisible: "Hattersheim am Main"
+- assertVisible: "Rhein-Main"
 
 - tapOn: "E-Mail-Adresse"
 - inputText: "philip@gmail.com"

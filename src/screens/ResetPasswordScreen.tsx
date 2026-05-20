@@ -135,7 +135,7 @@ export function ResetPasswordScreen({ onDone }: Props) {
             <Text style={styles.badgeMonogram}>PK</Text>
           </View>
           <Text style={styles.studioName}>PK-Fussballschule</Text>
-          <Text style={styles.studioCity}>Hattersheim am Main</Text>
+          <Text style={styles.studioCity}>Rhein-Main</Text>
         </View>
 
         <View style={styles.formCard}>

@@ -30,8 +30,8 @@ export async function exportToCalendar(appt: Appointment) {
     `DTSTART:${dateStr}T${startStr}`,
     `DTEND:${dateStr}T${endStr}`,
     `SUMMARY:${summary} – PK Fußballschule`,
-    'DESCRIPTION:PK Fußballschule Training – Hattersheim am Main',
-    'LOCATION:PK Fußballschule – Hattersheim am Main',
+    'DESCRIPTION:PK Fußballschule Training – Rhein-Main',
+    'LOCATION:PK Fußballschule – Rhein-Main',
     'END:VEVENT',
     'END:VCALENDAR',
   ].join('\r\n');
