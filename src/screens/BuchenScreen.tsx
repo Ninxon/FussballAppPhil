@@ -147,6 +147,38 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
   const stepIdx = STEPS.indexOf(step);
   const currentProgram = PROGRAMS.find(p => p.id === selProgram);
 
+  // Slot availability + capacity derived from the trainer schedules.
+  // Memoized so the per-slot filtering runs once per program/date change
+  // instead of re-filtering trainerSchedules for every rendered slot.
+  const slotInfo = React.useMemo(() => {
+    const baseCapacity = currentProgram?.capacity ?? 1;
+    const TORWART_IDS = ['torhueter_individual', 'torhueter_gruppe'];
+    const neededSpecialty = selProgram && TORWART_IDS.includes(selProgram) ? 'torwart' : 'spieler';
+    const jsDay = selDate ? new Date(selDate).getDay() : 0;
+    const dayOfWeek = jsDay === 0 ? 7 : jsDay;
+    const relevantIds = trainers
+      .filter(t => t.trainer_specialty === neededSpecialty)
+      .map(t => t.id);
+    const hasMatchingTrainer = relevantIds.length > 0;
+
+    // Each matching schedule row is one trainer covering that time → +baseCapacity.
+    const capacityByTime = new Map<string, number>();
+    for (const s of trainerSchedules) {
+      if (relevantIds.includes(s.trainer_id) && s.day_of_week === dayOfWeek) {
+        capacityByTime.set(s.time, (capacityByTime.get(s.time) ?? 0) + baseCapacity);
+      }
+    }
+
+    const allowedSlots = hasMatchingTrainer
+      ? SLOTS.filter(s => capacityByTime.has(s))
+      : SLOTS;
+
+    const getSlotCapacity = (time: string): number =>
+      hasMatchingTrainer ? (capacityByTime.get(time) ?? 0) : baseCapacity;
+
+    return { relevantIds, allowedSlots, getSlotCapacity };
+  }, [currentProgram, selProgram, selDate, trainers, trainerSchedules]);
+
   const allowedPrograms = profile
     ? PROGRAMS.filter(p => isProgramAllowed(profile, p.id))
     : [];
@@ -362,31 +394,7 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
     const playerLevel = profile?.level ?? null;
     const sessionYear = selDate ? parseInt(selDate.slice(0, 4)) : new Date().getFullYear();
 
-    const baseCapacity = currentProgram?.capacity ?? 1;
-
-    const TORWART_IDS = ['torhueter_individual', 'torhueter_gruppe'];
-    const neededSpecialty = selProgram && TORWART_IDS.includes(selProgram) ? 'torwart' : 'spieler';
-    const jsDay = selDate ? new Date(selDate).getDay() : 0;
-    const dayOfWeek = jsDay === 0 ? 7 : jsDay;
-    const relevantIds = trainers
-      .filter(t => t.trainer_specialty === neededSpecialty)
-      .map(t => t.id);
-    const hasMatchingTrainer = relevantIds.length > 0;
-    const scheduledTimes = trainerSchedules
-      .filter(s => relevantIds.includes(s.trainer_id) && s.day_of_week === dayOfWeek)
-      .map(s => s.time);
-
-    const getSlotCapacity = (time: string): number => {
-      if (!hasMatchingTrainer) return baseCapacity;
-      const count = trainerSchedules.filter(
-        s => relevantIds.includes(s.trainer_id) && s.day_of_week === dayOfWeek && s.time === time,
-      ).length;
-      return count > 0 ? baseCapacity * count : 0;
-    };
-
-    const allowedSlots = hasMatchingTrainer
-      ? SLOTS.filter(s => scheduledTimes.includes(s))
-      : SLOTS;
+    const { relevantIds, allowedSlots, getSlotCapacity } = slotInfo;
 
     const GROUP_SIZE = 4;
 
