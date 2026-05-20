@@ -1,0 +1,24 @@
+{
+  "name": "PK-Fußballschule",
+  "short_name": "PK-Fußball",
+  "description": "Trainingstermine buchen bei der PK-Fußballschule Hattersheim",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1e3a2f",
+  "theme_color": "#5A8C6A",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
