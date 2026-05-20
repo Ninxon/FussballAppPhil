@@ -91,7 +91,7 @@ export function useAdminData() {
   };
 
   const cancelAppointment = async (id: string) => {
-    const { data, error } = await supabase.rpc('cancel_and_issue_token', { p_appointment_id: id });
+    const { data, error } = await supabase.rpc('cancel_and_issue_token', { p_appointment_id: id, p_skip_token: false });
     if (error) return { error };
     const result = data as { error?: string } | null;
     if (result?.error) return { error: { message: result.error } };
