@@ -12,6 +12,10 @@ function getCategory(program: string): ProgramCategory {
   return PROGRAM_CATEGORY[program as ProgramId] ?? 'individual';
 }
 
+// PostgREST serializes native time columns as "HH:MM:SS" — normalize to "HH:MM".
+const fmtTime = <T extends { time?: string | null }>(a: T): T =>
+  ({ ...a, time: a.time ? a.time.slice(0, 5) : a.time });
+
 export function useAppointments(profile: Profile | null) {
   const [slotCounts, setSlotCounts] = useState<SlotCount[]>([]);
   const [slotPlayers, setSlotPlayers] = useState<SlotPlayer[]>([]);
@@ -38,7 +42,7 @@ export function useAppointments(profile: Profile | null) {
       if (!isMounted) return;
       if (countsData.data) setSlotCounts(countsData.data as SlotCount[]);
       if (playersData.data) setSlotPlayers(playersData.data as SlotPlayer[]);
-      if (allData.data) setMyAppointments(allData.data as Appointment[]);
+      if (allData.data) setMyAppointments((allData.data as Appointment[]).map(fmtTime));
       setActiveTokens((tokenData.data ?? []) as CancellationToken[]);
       setLoading(false);
     };
@@ -63,7 +67,7 @@ export function useAppointments(profile: Profile | null) {
       .channel(`appointments-live-${Date.now()}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointments' }, (payload) => {
         if (!isMounted) return;
-        const appt = payload.new as Appointment;
+        const appt = fmtTime(payload.new as Appointment);
         if (userIdRef.current && appt.user_id === userIdRef.current) {
           setMyAppointments(prev => prev.some(a => a.id === appt.id) ? prev : [...prev, appt]);
         }
@@ -93,8 +97,8 @@ export function useAppointments(profile: Profile | null) {
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'appointments' }, (payload) => {
         if (!isMounted) return;
-        const appt = payload.new as Appointment;
-        const old = payload.old as Appointment;
+        const appt = fmtTime(payload.new as Appointment);
+        const old = fmtTime(payload.old as Appointment);
         setMyAppointments(prev => prev.map(a => a.id === appt.id ? appt : a));
         if (old.status === 'confirmed' && appt.status === 'cancelled') {
           if (optimisticallyHandledCancelRef.current.has(appt.id)) {
@@ -125,7 +129,7 @@ export function useAppointments(profile: Profile | null) {
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'appointments' }, (payload) => {
         if (!isMounted) return;
-        const appt = payload.old as Appointment;
+        const appt = fmtTime(payload.old as Appointment);
         setMyAppointments(prev => prev.filter(a => a.id !== appt.id));
         if (appt.status === 'confirmed') {
           setSlotCounts(prev => prev.map(s =>

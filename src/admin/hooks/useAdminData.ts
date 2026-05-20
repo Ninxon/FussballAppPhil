@@ -44,6 +44,10 @@ export type TrainerProfile = {
   trainer_specialty?: TrainerSpecialty | null;
 };
 
+// PostgREST serializes native time columns as "HH:MM:SS" — normalize to "HH:MM".
+const fmtTime = <T extends { time?: string | null }>(a: T): T =>
+  ({ ...a, time: a.time ? a.time.slice(0, 5) : a.time });
+
 export function useAdminData() {
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
   const [allAppointments, setAllAppointments] = useState<AdminAppointment[]>([]);
@@ -75,9 +79,9 @@ export function useAdminData() {
       setLoadError(profilesErr?.message ?? apptsErr?.message ?? 'Fehler beim Laden.');
     }
     setCustomers((profiles ?? []) as CustomerProfile[]);
-    setAllAppointments((appointments ?? []) as AdminAppointment[]);
+    setAllAppointments(((appointments ?? []) as AdminAppointment[]).map(fmtTime));
     setTrainers((trainerProfiles ?? []) as TrainerProfile[]);
-    setTrainerSchedules((schedules ?? []) as TrainerSchedule[]);
+    setTrainerSchedules(((schedules ?? []) as TrainerSchedule[]).map(fmtTime));
 
     const tokenMap: Record<string, { individual: number; gruppe: number }> = {};
     for (const token of (allTokens ?? []) as { user_id: string; category: string }[]) {
@@ -119,7 +123,7 @@ export function useAdminData() {
     if (conflicts && conflicts.length >= 2) {
       return { error: { message: 'Der Kunde hat an diesem Tag bereits zwei Termine.' } };
     }
-    if (conflicts && conflicts.some((c: { time: string }) => c.time === time)) {
+    if (conflicts && conflicts.some((c: { time: string }) => c.time.slice(0, 5) === time)) {
       return { error: { message: 'Der Kunde hat an diesem Tag zur gleichen Uhrzeit bereits einen Termin.' } };
     }
 
@@ -187,7 +191,7 @@ export function useAdminData() {
     });
 
     if (data && !error) {
-      setAllAppointments(prev => [...prev, data as AdminAppointment]);
+      setAllAppointments(prev => [...prev, fmtTime(data as AdminAppointment)]);
     }
     return { error };
   };
