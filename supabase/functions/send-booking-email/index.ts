@@ -48,8 +48,13 @@ Deno.serve(async (req) => {
   const programName = PROGRAM_NAMES[program] ?? 'Training';
 
   const safeName = (name ?? '').replace(/[<>]/g, '').slice(0, 100);
-  const safeDate = (date ?? '').replace(/[^0-9\-.]/g, '');
   const safeTime = (time ?? '').replace(/[^0-9:]/g, '');
+  // Format date as DD.MM.YYYY for the email body
+  const rawDate = (date ?? '').replace(/[^0-9-]/g, '');
+  const dateParts = rawDate.split('-');
+  const safeDate = dateParts.length === 3
+    ? `${dateParts[2]}.${dateParts[1]}.${dateParts[0]}`
+    : rawDate;
 
   await transporter.sendMail({
     from: `"PK Fußballschule" <${Deno.env.get('GMAIL_USER')}>`,

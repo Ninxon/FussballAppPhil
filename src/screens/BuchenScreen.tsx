@@ -280,11 +280,9 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
     const activeToken = effectiveCategory === 'individual' ? tokenIndividual
       : effectiveCategory === 'gruppe' ? tokenGruppe
       : (tokenIndividual ?? tokenGruppe);
-    const tokenMaxDate = activeToken ? (() => {
-      const d = new Date(activeToken.issued_at);
-      d.setDate(d.getDate() + 28);
-      return d;
-    })() : null;
+    // Use expires_at directly (set by DB as issued_at + 1 month) to match the
+    // hook validation — previously 28-day recalc was shorter than the real validity.
+    const tokenMaxDate = activeToken ? new Date(activeToken.expires_at) : null;
     const pad = (n: number) => String(n).padStart(2, '0');
     const tokenMaxStr = tokenMaxDate
       ? `${tokenMaxDate.getFullYear()}-${pad(tokenMaxDate.getMonth() + 1)}-${pad(tokenMaxDate.getDate())}`

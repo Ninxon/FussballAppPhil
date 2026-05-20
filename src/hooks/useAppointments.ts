@@ -20,6 +20,8 @@ export function useAppointments(profile: Profile | null) {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const userIdRef = useRef<string | null>(null);
+  // Track IDs already handled by optimistic updates to prevent Realtime double-counting
+  const optimisticallyHandledRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let isMounted = true;
@@ -62,6 +64,12 @@ export function useAppointments(profile: Profile | null) {
         const appt = payload.new as Appointment;
         if (userIdRef.current && appt.user_id === userIdRef.current) {
           setMyAppointments(prev => prev.some(a => a.id === appt.id) ? prev : [...prev, appt]);
+        }
+        // Skip slot count / player updates if this appointment was already handled
+        // by an optimistic update in addAppointment to prevent double-counting
+        if (optimisticallyHandledRef.current.has(appt.id)) {
+          optimisticallyHandledRef.current.delete(appt.id);
+          return;
         }
         if (appt.status === 'confirmed') {
           setSlotCounts(prev => {
@@ -159,8 +167,9 @@ export function useAppointments(profile: Profile | null) {
       return { error: { message: 'Nachholtermine können nur mit einem gültigen Stornierungstoken gebucht werden.' } };
     }
 
-    const maxDate = new Date(activeToken.issued_at);
-    maxDate.setDate(maxDate.getDate() + 28);
+    // Use the token's own expires_at (issued_at + 1 month set by DB) rather than
+    // recalculating 28 days here, which was shorter than the actual validity period.
+    const maxDate = new Date(activeToken.expires_at);
     if (new Date(date + 'T12:00:00') > maxDate) {
       return { error: { message: `Nachholtermin muss bis ${maxDate.toLocaleDateString('de-DE')} gebucht werden.` } };
     }
@@ -188,7 +197,9 @@ export function useAppointments(profile: Profile | null) {
 
     const newAppt = result?.appointment as Appointment;
     if (newAppt) {
-      setMyAppointments(prev => [...prev, newAppt]);
+      // Register this ID so the Realtime INSERT handler skips double-counting
+      optimisticallyHandledRef.current.add(newAppt.id);
+      setMyAppointments(prev => prev.some(a => a.id === newAppt.id) ? prev : [...prev, newAppt]);
       setSlotCounts(prev => {
         const idx = prev.findIndex(s => s.date === date && s.time === time && s.program === program);
         if (idx !== -1) return prev.map((s, i) => i === idx ? { ...s, booked: s.booked + 1 } : s);
@@ -218,7 +229,10 @@ export function useAppointments(profile: Profile | null) {
     const { data: { session } } = await supabase.auth.getSession();
     const user = session?.user;
 
-    const { data, error } = await supabase.rpc('cancel_and_issue_token', { p_appointment_id: id });
+    const { data, error } = await supabase.rpc('cancel_and_issue_token', {
+      p_appointment_id: id,
+      p_skip_token: skipToken,
+    });
 
     if (error) return { error };
     const result = data as { token?: CancellationToken; error?: string } | null;

@@ -1,6 +1,14 @@
 import { createClient } from 'npm:@supabase/supabase-js';
 import nodemailer from 'npm:nodemailer';
 
+const PROGRAM_NAMES: Record<string, string> = {
+  individual:           'Individualtraining',
+  gruppe:               'Gruppentraining',
+  athletik:             'Athletiktraining',
+  torhueter_individual: 'Torwart Individual',
+  torhueter_gruppe:     'Torwart Gruppe',
+};
+
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
@@ -29,7 +37,7 @@ Deno.serve(async (req) => {
 
   const { data: appointments } = await supabase
     .from('appointments')
-    .select('user_id, date, time')
+    .select('user_id, date, time, program')
     .eq('date', tomorrowStr)
     .eq('status', 'confirmed');
 
@@ -50,16 +58,24 @@ Deno.serve(async (req) => {
 
     if (!user?.email) continue;
 
+    const programName = PROGRAM_NAMES[appt.program] ?? 'Training';
+    // Format date as DD.MM.YYYY
+    const dateParts = (appt.date as string).split('-');
+    const fmtDate = dateParts.length === 3
+      ? `${dateParts[2]}.${dateParts[1]}.${dateParts[0]}`
+      : appt.date;
+
     await transporter.sendMail({
       from: `"PK Fußballschule" <${Deno.env.get('GMAIL_USER')}>`,
       to: user.email,
-      subject: '⏰ Erinnerung – Dein Training morgen',
+      subject: `⏰ Erinnerung – ${programName} morgen`,
       html: `
         <div style="font-family:sans-serif;max-width:480px;margin:auto">
           <h2 style="color:#3a7a52">Hallo ${profile?.full_name ?? ''},</h2>
           <p>wir möchten dich an dein Training <strong>morgen</strong> erinnern.</p>
           <table style="background:#f5f5f5;border-radius:10px;padding:16px 24px;width:100%">
-            <tr><td style="color:#666;padding:6px 0">Datum</td><td><strong>${appt.date}</strong></td></tr>
+            <tr><td style="color:#666;padding:6px 0">Leistung</td><td><strong>${programName}</strong></td></tr>
+            <tr><td style="color:#666;padding:6px 0">Datum</td><td><strong>${fmtDate}</strong></td></tr>
             <tr><td style="color:#666;padding:6px 0">Uhrzeit</td><td><strong>${appt.time} Uhr</strong></td></tr>
           </table>
           <p style="color:#888;font-size:14px;margin-top:24px">Bis morgen!<br>Dein PK Fußballschule Team</p>
