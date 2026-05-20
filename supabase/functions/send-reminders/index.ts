@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
           <table style="background:#f5f5f5;border-radius:10px;padding:16px 24px;width:100%">
             <tr><td style="color:#666;padding:6px 0">Leistung</td><td><strong>${programName}</strong></td></tr>
             <tr><td style="color:#666;padding:6px 0">Datum</td><td><strong>${fmtDate}</strong></td></tr>
-            <tr><td style="color:#666;padding:6px 0">Uhrzeit</td><td><strong>${appt.time} Uhr</strong></td></tr>
+            <tr><td style="color:#666;padding:6px 0">Uhrzeit</td><td><strong>${(appt.time as string).slice(0, 5)} Uhr</strong></td></tr>
           </table>
           <p style="color:#888;font-size:14px;margin-top:24px">Bis morgen!<br>Dein PK Fußballschule Team</p>
         </div>
