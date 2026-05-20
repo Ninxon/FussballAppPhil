@@ -5,7 +5,7 @@
     <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
 
-    <!-- Content Security Policy: schützt vor XSS-Angriffen -->
+    <!-- Content Security Policy -->
     <meta
       http-equiv="Content-Security-Policy"
       content="
@@ -22,49 +22,38 @@
       "
     />
 
-    <!-- Verhindert Clickjacking -->
     <meta http-equiv="X-Frame-Options" content="DENY" />
-    <!-- Verhindert MIME-Sniffing -->
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-    <!-- Kein Referrer an externe Seiten -->
     <meta name="referrer" content="strict-origin-when-cross-origin" />
 
     <title>PK-Fußballschule</title>
 
-    <!-- Favicon & Icons -->
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
-
-    <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
+    <link rel="shortcut icon" href="/favicon.ico" />
 
-    <!-- Theme & PWA Meta -->
     <meta name="theme-color" content="#5A8C6A" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="PK-Fußball" />
 
-    <!-- The `react-native-web` recommended style reset -->
     <style id="expo-reset">
       html, body { height: 100%; }
       body { overflow: hidden; }
       #root { display: flex; height: 100%; flex: 1; }
     </style>
-
-    <link rel="shortcut icon" href="/favicon.ico" />
   </head>
   <body>
     <noscript>Diese App benötigt JavaScript.</noscript>
     <div id="root"></div>
 
-    <script src="/_expo/static/js/web/AppEntry-ede4c83a4ec21c3b47ac187353b45cd7.js" defer></script>
+    <script src="/_expo/static/js/web/AppEntry-f12e809270cefd5b2bc6337a093dae68.js" defer></script>
 
     <script>
-      // Service Worker registrieren
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
       }
-      // beforeinstallprompt früh abfangen, bevor React gemountet ist
       window.addEventListener('beforeinstallprompt', e => {
         e.preventDefault();
         window._pwaInstallPrompt = e;
