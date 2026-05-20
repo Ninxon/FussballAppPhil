@@ -179,6 +179,51 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
     return { relevantIds, allowedSlots, getSlotCapacity };
   }, [currentProgram, selProgram, selDate, trainers, trainerSchedules]);
 
+  const GROUP_SIZE = 4;
+
+  // Single source for slot availability so the time step and the confirm step
+  // agree. For groups the free count is the free spots in the *group the player
+  // would actually join* (via reconstructGroups) — not the raw slot-wide count,
+  // which mixes other trainers' parallel groups at the same time.
+  const slotAvailability = (time: string) => {
+    const totalCapacity = slotInfo.getSlotCapacity(time);
+    const booked = slotCounts.find(s => s.date === selDate && s.time === time && s.program === selProgram)?.booked ?? 0;
+    const isGroup = selProgram ? PROGRAM_CATEGORY[selProgram] === 'gruppe' : false;
+    const playerBirthYear = profile?.birth_date ? parseInt(profile.birth_date.slice(0, 4)) : null;
+    const playerLevel = profile?.level ?? null;
+    const sessionYear = selDate ? parseInt(selDate.slice(0, 4)) : new Date().getFullYear();
+
+    let freeInGroup = GROUP_SIZE;
+    let groupUnavailable = false;
+    if (isGroup && playerBirthYear && playerLevel) {
+      const existingPlayers = slotPlayers
+        .filter(p => p.date === selDate && p.time === time && p.program === selProgram)
+        .filter(p => p.session_birth_year != null && p.session_level)
+        .map(p => ({ birthYear: p.session_birth_year!, level: p.session_level as any, created_at: p.created_at }));
+      const groups = reconstructGroups(existingPlayers, GROUP_SIZE, sessionYear);
+      const trainerCount = slotInfo.relevantIds.length || 1;
+
+      let targetGroupIndex = -1;
+      for (let i = 0; i < groups.length; i++) {
+        if (groups[i].length < GROUP_SIZE &&
+            canJoinGroupSlot({ birthYear: playerBirthYear, level: playerLevel }, groups[i], sessionYear).allowed) {
+          targetGroupIndex = i;
+          break;
+        }
+      }
+      if (targetGroupIndex === -1) {
+        if (groups.length >= trainerCount) groupUnavailable = true;
+        else targetGroupIndex = groups.length;
+      }
+      if (!groupUnavailable) freeInGroup = GROUP_SIZE - (groups[targetGroupIndex]?.length ?? 0);
+    } else if (isGroup) {
+      const rem = booked % GROUP_SIZE;
+      freeInGroup = rem === 0 ? GROUP_SIZE : GROUP_SIZE - rem;
+    }
+
+    return { totalCapacity, booked, isGroup, freeInGroup, groupUnavailable };
+  };
+
   const allowedPrograms = profile
     ? PROGRAMS.filter(p => isProgramAllowed(profile, p.id))
     : [];
@@ -392,48 +437,21 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
     const isGroup = selProgram ? PROGRAM_CATEGORY[selProgram] === 'gruppe' : false;
     const playerBirthYear = profile?.birth_date ? parseInt(profile.birth_date.slice(0, 4)) : null;
     const playerLevel = profile?.level ?? null;
-    const sessionYear = selDate ? parseInt(selDate.slice(0, 4)) : new Date().getFullYear();
 
-    const { relevantIds, allowedSlots, getSlotCapacity } = slotInfo;
-
-    const GROUP_SIZE = 4;
+    const { allowedSlots } = slotInfo;
 
     const SlotGroup = ({ label, slots }: { label: string; slots: string[] }) => (
       <View style={{ marginBottom: 20 }}>
         <Text style={styles.slotGroupLabel}>{label}</Text>
         <View style={styles.slotGrid}>
           {slots.map(t => {
-            const totalCapacity = getSlotCapacity(t);
-            const booked = slotCounts.find(s => s.date === selDate && s.time === t && s.program === selProgram)?.booked ?? 0;
-            const slotPlayerList = slotPlayers.filter(p => p.date === selDate && p.time === t && p.program === selProgram);
+            const { totalCapacity, booked, freeInGroup, groupUnavailable } = slotAvailability(t);
             const userBooked = myAppointments.some(a => a.date === selDate && a.time === t && a.status === 'confirmed');
             const isPast = isToday && t <= nowStr;
 
-            let freeInGroup = GROUP_SIZE;
-            if (isGroup && !isPast && !userBooked && playerBirthYear && playerLevel) {
-              const existingPlayers = slotPlayerList
-                .filter(p => p.session_birth_year != null && p.session_level)
-                .map(p => ({ birthYear: p.session_birth_year!, level: p.session_level as any, created_at: p.created_at }));
-              const groups = reconstructGroups(existingPlayers, GROUP_SIZE, sessionYear);
-              const trainerCount = relevantIds.length || 1;
-
-              let targetGroupIndex = -1;
-              for (let i = 0; i < groups.length; i++) {
-                if (groups[i].length < GROUP_SIZE) {
-                  if (canJoinGroupSlot({ birthYear: playerBirthYear, level: playerLevel }, groups[i], sessionYear).allowed) {
-                    targetGroupIndex = i;
-                    break;
-                  }
-                }
-              }
-              if (targetGroupIndex === -1) {
-                if (groups.length >= trainerCount) return null;
-                targetGroupIndex = groups.length;
-              }
-              freeInGroup = GROUP_SIZE - (groups[targetGroupIndex]?.length ?? 0);
-            } else if (isGroup) {
-              const rem = booked % GROUP_SIZE;
-              freeInGroup = rem === 0 ? GROUP_SIZE : GROUP_SIZE - rem;
+            // Bookable group slot where no compatible group has room → hide it.
+            if (isGroup && groupUnavailable && !isPast && !userBooked && playerBirthYear && playerLevel) {
+              return null;
             }
 
             const full = booked >= totalCapacity || userBooked || isPast;
@@ -486,8 +504,12 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
 
   // ── ConfirmStep ───────────────────────────────────────────────
   function ConfirmStep() {
-    const capacity = currentProgram?.capacity ?? 1;
-    const booked = slotCounts.find(s => s.date === selDate && s.time === selTime && s.program === selProgram)?.booked ?? 0;
+    const { totalCapacity, booked, isGroup, freeInGroup } = slotAvailability(selTime!);
+    // Mirror the time step: for groups show the free spots in the group the
+    // player actually joins; for individual show the slot-wide free count.
+    const availLabel = isGroup
+      ? `${freeInGroup} von ${GROUP_SIZE} Plätzen frei`
+      : `${Math.max(0, totalCapacity - booked)} von ${totalCapacity} Plätzen frei`;
     const doBook = async () => {
       setBookingError(null);
       const { error } = await addAppointment(selDate!, selTime!, selProgram!);
@@ -502,7 +524,7 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
       ['Datum', fmtDate(selDate!)],
       ['Uhrzeit', `${selTime} Uhr`],
       ['Dauer', `${currentProgram?.duration ?? 60} Minuten`],
-      ['Verfügbar', `${capacity - booked} von ${capacity} Plätzen frei`],
+      ['Verfügbar', availLabel],
     ];
     return (
       <FadeUp>

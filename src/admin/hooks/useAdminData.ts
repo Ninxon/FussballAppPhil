@@ -119,6 +119,19 @@ export function useAdminData() {
     userId: string, date: string, time: string, program: string,
     trainerId?: string | null,
   ) => {
+    // No bookings in the past — neither past days nor past times today. The
+    // time guard also catches the default slot staying selected after its chip
+    // was disabled (e.g. 13:00 still set when it is already afternoon).
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    if (date < today) {
+      return { error: { message: 'Datum darf nicht in der Vergangenheit liegen.' } };
+    }
+    if (date === today && time <= `${pad(now.getHours())}:${pad(now.getMinutes())}`) {
+      return { error: { message: 'Diese Uhrzeit liegt bereits in der Vergangenheit.' } };
+    }
+
     const { data: conflicts } = await AppointmentService.checkDailyConflict(userId, date);
     if (conflicts && conflicts.length >= 2) {
       return { error: { message: 'Der Kunde hat an diesem Tag bereits zwei Termine.' } };
