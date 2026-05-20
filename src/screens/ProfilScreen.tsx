@@ -275,7 +275,6 @@ export function ProfilScreen({ onLogout }: Props) {
         <SectionCard title="Kontakt">
           <InfoRow label="Büro" value={STUDIO.name} />
           <InfoRow label="Adresse" value={STUDIO.address} />
-          <InfoRow label="Telefon" value={STUDIO.phone} />
           <InfoRow label="Kundenservice" value="+49 152 53148032" />
           <InfoRow label="E-Mail" value={STUDIO.email} />
           <InfoRow label="Erreichbar" value={STUDIO.hours} last />
