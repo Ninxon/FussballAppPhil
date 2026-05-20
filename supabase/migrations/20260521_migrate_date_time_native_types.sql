@@ -86,6 +86,12 @@ $$;
 -- Internal casts (p_date::date, birth_date::date, p_date::date for ISODOW)
 -- are all removed. JSON return uses to_char for time so the client still
 -- receives "HH:MM" instead of "HH:MM:SS".
+--
+-- Note: the old "IF NOW() > issued_at + 28 days" guard is intentionally absent.
+-- It was removed in migration 20260520_fix_book_with_token_remove_28day_check.sql
+-- because the WHERE clause already enforces expires_at > NOW(), and expires_at is
+-- set to issued_at + 1 month (the correct business rule). 28 days was a shorter
+-- inconsistent duplicate check, not the intended validity window.
 CREATE OR REPLACE FUNCTION public.book_with_token(
   p_token_id  uuid,
   p_date      date,

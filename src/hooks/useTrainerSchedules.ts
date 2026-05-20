@@ -8,6 +8,10 @@ export type TrainerWithSpecialty = {
   trainer_specialty?: TrainerSpecialty | null;
 };
 
+// PostgREST serializes native time columns as "HH:MM:SS" — normalize to "HH:MM".
+const fmtTime = <T extends { time?: string | null }>(a: T): T =>
+  ({ ...a, time: a.time ? a.time.slice(0, 5) : a.time });
+
 export function useTrainerSchedules() {
   const [trainerSchedules, setTrainerSchedules] = useState<TrainerSchedule[]>([]);
   const [trainers, setTrainers] = useState<TrainerWithSpecialty[]>([]);
@@ -24,7 +28,7 @@ export function useTrainerSchedules() {
         .order('full_name'),
     ]).then(([s, t]) => {
       if (!isMounted) return;
-      if (s.data) setTrainerSchedules(s.data as TrainerSchedule[]);
+      if (s.data) setTrainerSchedules((s.data as TrainerSchedule[]).map(fmtTime));
       if (t.data) setTrainers(t.data as TrainerWithSpecialty[]);
     });
 
