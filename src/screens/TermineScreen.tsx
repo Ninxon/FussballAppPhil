@@ -7,6 +7,11 @@ import { Card } from '../components/Card';
 import { Btn } from '../components/Btn';
 import { Appointment, CancellationToken, Tab } from '../types';
 import { todayStr, fmtDate, DE_MONTHS, DE_DAYS_SHORT } from '../constants/i18n';
+
+function nowTimeStr() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
 import { PROGRAMS } from '../constants/programs';
 import { exportToCalendar } from '../utils/calendar';
 import { isWithinCancellationDeadline } from '../utils/bookingRules';
@@ -192,8 +197,10 @@ function ApptCard({ appt, onCancel }: { appt: Appointment; onCancel: (id: string
   const [expanded, setExpanded] = useState(false);
   const [deadlineError, setDeadlineError] = useState(false);
   const ts = todayStr();
-  const dimmed = appt.status === 'cancelled' || appt.date < ts;
-  const upcoming = appt.status === 'confirmed' && appt.date >= ts;
+  const nowTime = nowTimeStr();
+  const isPast = appt.date < ts || (appt.date === ts && appt.time <= nowTime);
+  const dimmed = appt.status === 'cancelled' || isPast;
+  const upcoming = appt.status === 'confirmed' && !isPast;
   const program = PROGRAMS.find(p => p.id === appt.program);
   const programColor = PROGRAM_COLORS[appt.program] ?? C.accentLight;
 
@@ -321,12 +328,13 @@ export function TermineScreen({ appointments, cancelAppointment, activeTokens, s
     ? appointments.filter(a => a.date === selectedDate)
     : null;
 
+  const nowTime = nowTimeStr();
   const upcoming = selectedDate ? [] : [...appointments]
-    .filter(a => a.date >= ts && a.status === 'confirmed')
+    .filter(a => a.status === 'confirmed' && (a.date > ts || (a.date === ts && a.time > nowTime)))
     .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
 
   const past = selectedDate ? [] : [...appointments]
-    .filter(a => a.date < ts || a.status === 'cancelled')
+    .filter(a => a.status === 'cancelled' || a.date < ts || (a.date === ts && a.time <= nowTime))
     .sort((a, b) => b.date.localeCompare(a.date));
 
   return (
