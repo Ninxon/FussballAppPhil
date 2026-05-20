@@ -72,7 +72,8 @@ export function TrainerApp({ onLogout }: Props) {
       ]);
 
       setProfile(prof as TrainerProfile ?? null);
-      setAppointments((appts ?? []) as TrainerAppointment[]);
+      // Normalize time: PostgREST serializes native time type as "HH:MM:SS"
+      setAppointments(((appts ?? []) as TrainerAppointment[]).map(a => ({ ...a, time: a.time?.slice(0, 5) ?? a.time })));
       setVideos((vids ?? []) as TrainerVideo[]);
       setLoading(false);
     };
