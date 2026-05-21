@@ -23,8 +23,11 @@ const transporter = nodemailer.createTransport({
 });
 
 Deno.serve(async (req) => {
+  // Fail closed: reject unless CRON_SECRET is configured AND matches the header.
+  // (Previously a missing CRON_SECRET skipped the check entirely, leaving the
+  // endpoint open to anyone triggering reminder emails.)
   const cronSecret = Deno.env.get('CRON_SECRET');
-  if (cronSecret && req.headers.get('x-cron-secret') !== cronSecret) {
+  if (!cronSecret || req.headers.get('x-cron-secret') !== cronSecret) {
     return new Response(JSON.stringify({ error: 'Nicht autorisiert' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
