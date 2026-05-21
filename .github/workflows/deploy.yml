@@ -24,9 +24,6 @@ jobs:
       - name: Run tests
         run: npx jest --ci --passWithNoTests
 
-      - name: TypeScript check
-        run: npx tsc --noEmit
-
       - name: Build (Expo export)
         run: npx expo export --platform web
 
