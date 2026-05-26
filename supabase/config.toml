@@ -431,7 +431,9 @@ entrypoint = "./functions/send-cancellation-email/index.ts"
 
 [functions.send-reminders]
 enabled = true
-verify_jwt = true
+# Muss false bleiben: pg_cron ruft die Funktion ohne Supabase-JWT auf,
+# die Autorisierung erfolgt über den x-cron-secret-Header im Handler.
+verify_jwt = false
 import_map = "./functions/send-reminders/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx

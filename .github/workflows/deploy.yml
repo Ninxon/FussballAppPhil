@@ -33,8 +33,22 @@ jobs:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
 
-      - name: Restore PWA files
-        run: git checkout HEAD -- dist/
+      # Expo regenerates dist/ from scratch: it produces a fresh hashed bundle
+      # but a bare index.html and drops the hand-maintained PWA files. We keep
+      # the FRESH bundle, restore the PWA-complete index.html + PWA assets from
+      # git, and rewrite index.html to point at the freshly built bundle.
+      - name: Assemble PWA dist
+        run: |
+          set -euo pipefail
+          NEW_BUNDLE="$(basename "$(ls dist/_expo/static/js/web/AppEntry-*.js | head -n1)")"
+          echo "Fresh bundle: $NEW_BUNDLE"
+          git checkout HEAD -- \
+            dist/index.html dist/manifest.json dist/sw.js \
+            dist/favicon.png dist/icon-192.png dist/icon-512.png
+          sed -i -E "s#AppEntry-[a-f0-9]+\.js#${NEW_BUNDLE}#g" dist/index.html
+          # Drop any stale committed bundle so only the fresh one ships.
+          find dist/_expo/static/js/web -name 'AppEntry-*.js' ! -name "${NEW_BUNDLE}" -delete
+          grep -q "$NEW_BUNDLE" dist/index.html
 
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -42,5 +56,6 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
           local-dir: ./dist/
           server-dir: /DEVEMS/

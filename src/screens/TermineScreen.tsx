@@ -178,6 +178,7 @@ function getStyles(C: Colors) {
     deadlineErrorCloseText: { fontSize: 12, fontWeight: '700', color: C.red },
     confirmSection: { borderTopWidth: 1, borderTopColor: C.cardBorder, padding: 16, paddingHorizontal: 20 },
     confirmText: { fontSize: 15, color: C.textMid, marginBottom: 14 },
+    cancelErrorText: { fontSize: 13, fontWeight: '600', color: C.red, marginBottom: 12, lineHeight: 18 },
     confirmBtns: { flexDirection: 'row', gap: 10 },
     cancelYesBtn: {
       flex: 1, height: 46, borderRadius: 12, backgroundColor: C.red,
@@ -195,11 +196,26 @@ function getStyles(C: Colors) {
   });
 }
 
-function ApptCard({ appt, onCancel }: { appt: Appointment; onCancel: (id: string, skipToken?: boolean) => void }) {
+function ApptCard({ appt, onCancel }: { appt: Appointment; onCancel: (id: string, skipToken?: boolean) => Promise<{ error: any }> }) {
   const { C } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
   const [expanded, setExpanded] = useState(false);
   const [deadlineError, setDeadlineError] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+
+  const doCancel = async (skipToken?: boolean) => {
+    setCancelling(true);
+    setCancelError(null);
+    const { error } = await onCancel(appt.id, skipToken);
+    setCancelling(false);
+    if (error) {
+      setCancelError(error.message ?? 'Stornierung fehlgeschlagen. Bitte versuche es erneut.');
+    } else {
+      setExpanded(false);
+      setDeadlineError(false);
+    }
+  };
   const ts = todayStr();
   const nowTime = nowTimeStr();
   const isPast = appt.date < ts || (appt.date === ts && appt.time <= nowTime);
@@ -267,11 +283,12 @@ function ApptCard({ appt, onCancel }: { appt: Appointment; onCancel: (id: string
         ) : expanded ? (
           <View style={styles.confirmSection}>
             <Text style={styles.confirmText}>Termin wirklich stornieren?</Text>
+            {cancelError && <Text style={styles.cancelErrorText}>{cancelError}</Text>}
             <View style={styles.confirmBtns}>
-              <TouchableOpacity onPress={() => onCancel(appt.id)} style={styles.cancelYesBtn} activeOpacity={0.8}>
-                <Text style={styles.cancelYesLabel}>Ja, stornieren</Text>
+              <TouchableOpacity onPress={() => doCancel()} disabled={cancelling} style={[styles.cancelYesBtn, cancelling && { opacity: 0.6 }]} activeOpacity={0.8}>
+                <Text style={styles.cancelYesLabel}>{cancelling ? 'Storniere…' : 'Ja, stornieren'}</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setExpanded(false)} style={styles.cancelNoBtn} activeOpacity={0.8}>
+              <TouchableOpacity onPress={() => setExpanded(false)} disabled={cancelling} style={styles.cancelNoBtn} activeOpacity={0.8}>
                 <Text style={styles.cancelNoLabel}>Abbrechen</Text>
               </TouchableOpacity>
             </View>
@@ -285,13 +302,15 @@ function ApptCard({ appt, onCancel }: { appt: Appointment; onCancel: (id: string
                   Du kannst den Termin noch stornieren, erhältst jedoch{' '}
                   <Text style={{ fontWeight: '800' }}>keinen Nachholtermin</Text>, da die 3-Stunden-Frist abgelaufen ist.
                 </Text>
+                {cancelError && <Text style={[styles.cancelErrorText, { marginTop: 8 }]}>{cancelError}</Text>}
                 <View style={styles.deadlineErrorBtns}>
                   <TouchableOpacity
-                    onPress={() => { setDeadlineError(false); onCancel(appt.id, true); }}
-                    style={styles.deadlineErrorConfirm}
+                    onPress={() => doCancel(true)}
+                    disabled={cancelling}
+                    style={[styles.deadlineErrorConfirm, cancelling && { opacity: 0.6 }]}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.deadlineErrorConfirmText}>Trotzdem stornieren</Text>
+                    <Text style={styles.deadlineErrorConfirmText}>{cancelling ? 'Storniere…' : 'Trotzdem stornieren'}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => setDeadlineError(false)} style={styles.deadlineErrorClose} activeOpacity={0.7}>
                     <Text style={styles.deadlineErrorCloseText}>Abbrechen</Text>
