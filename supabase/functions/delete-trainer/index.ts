@@ -51,35 +51,42 @@ Deno.serve(async (req) => {
     }
 
     // 1. Alle bestätigten Termine dieses Trainers laden
-    const { data: appointments } = await serviceClient
+    const { data: appointments, error: loadError } = await serviceClient
       .from('appointments')
-      .select('id, user_id, program')
+      .select('id, user_id, program, is_makeup, makeup_count')
       .eq('trainer_id', trainer_id)
       .eq('status', 'confirmed');
+    if (loadError) return json({ error: `Termine laden fehlgeschlagen: ${loadError.message}` }, 500);
 
     if (appointments && appointments.length > 0) {
       const expiresAt = new Date();
       expiresAt.setMonth(expiresAt.getMonth() + 1);
 
-      // 2. Nachholtermin-Tokens für betroffene Kunden ausstellen
-      await serviceClient.from('cancellation_tokens').insert(
+      // 2. Nachholtermin-Tokens für betroffene Kunden ausstellen. makeup_count
+      //    der Kette fortführen, damit das Storno-Limit erhalten bleibt.
+      const { error: tokenError } = await serviceClient.from('cancellation_tokens').insert(
         appointments.map((a: any) => ({
           user_id: a.user_id,
           category: PROGRAM_CATEGORY[a.program] ?? 'individual',
           expires_at: expiresAt.toISOString(),
           source_appointment_id: a.id,
+          makeup_count: a.is_makeup ? (a.makeup_count ?? 0) + 1 : 0,
         })),
       );
+      if (tokenError) return json({ error: `Tokens ausstellen fehlgeschlagen: ${tokenError.message}` }, 500);
 
       // 3. Termine stornieren
-      await serviceClient
+      const { error: cancelError } = await serviceClient
         .from('appointments')
         .update({ status: 'cancelled' })
         .in('id', appointments.map((a: any) => a.id));
+      if (cancelError) return json({ error: `Termine stornieren fehlgeschlagen: ${cancelError.message}` }, 500);
     }
 
     // 4. Notifications bereinigen falls Trainer dort referenziert ist
-    await serviceClient.from('notifications').update({ created_by: null }).eq('created_by', trainer_id);
+    const { error: notifError } = await serviceClient
+      .from('notifications').update({ created_by: null }).eq('created_by', trainer_id);
+    if (notifError) return json({ error: `Benachrichtigungen bereinigen fehlgeschlagen: ${notifError.message}` }, 500);
 
     // 5. Auth-User löschen (cascades zu profiles; ON DELETE SET NULL auf appointments.trainer_id)
     const { error: deleteError } = await serviceClient.auth.admin.deleteUser(trainer_id);

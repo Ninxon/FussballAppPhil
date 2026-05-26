@@ -601,6 +601,51 @@ describe('cancelAppointment — Erfolgspfad', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// cancelAppointment — Fehlerpfad (Anti-Regression: Fehler dürfen nicht
+// verschluckt werden, damit die UI sie anzeigen kann)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('cancelAppointment — Fehlerpfad', () => {
+  it('Business-Fehler (z. B. Nachholtermin-Limit) wird als { error } zurückgegeben', async () => {
+    (supabase.rpc as jest.Mock).mockImplementation((name: string) => {
+      if (name === 'cancel_and_issue_token') {
+        return Promise.resolve({
+          data: { error: 'Dieser Nachholtermin kann nicht mehr storniert werden. Bitte wende dich an deinen Trainer.' },
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: [], error: null });
+    });
+    const appt = confirmedAppt();
+    const { result } = await loadHookWithState([appt], []);
+
+    let r: any;
+    await act(async () => { r = await result.current.cancelAppointment('appt-1'); });
+
+    expect(r.error?.message).toMatch(/nicht mehr storniert/i);
+    // Termin darf NICHT optimistisch als storniert markiert werden
+    expect(result.current.myAppointments[0].status).toBe('confirmed');
+  });
+
+  it('Transport-Fehler der RPC wird propagiert', async () => {
+    (supabase.rpc as jest.Mock).mockImplementation((name: string) => {
+      if (name === 'cancel_and_issue_token') {
+        return Promise.resolve({ data: null, error: { message: 'network down' } });
+      }
+      return Promise.resolve({ data: [], error: null });
+    });
+    const appt = confirmedAppt();
+    const { result } = await loadHookWithState([appt], []);
+
+    let r: any;
+    await act(async () => { r = await result.current.cancelAppointment('appt-1'); });
+
+    expect(r.error).toBeTruthy();
+    expect(result.current.myAppointments[0].status).toBe('confirmed');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // cancelAppointment — Race Condition Guard
 // ─────────────────────────────────────────────────────────────────────────────
 

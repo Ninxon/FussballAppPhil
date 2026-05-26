@@ -200,7 +200,9 @@ export function reconstructGroups(
 }
 
 export function isBookableDay(dateStr: string): boolean {
-  const d = new Date(dateStr);
+  // Mittags-Anker, damit YYYY-MM-DD nicht als UTC-Mitternacht geparst wird
+  // (sonst kann getDay() in negativen Zeitzonen einen Tag verrutschen).
+  const d = new Date(dateStr + 'T12:00:00');
   const dow = d.getDay();
   if (dow === 0 || dow === 6) return false;
   if (germanHolidays(d.getFullYear()).has(dateStr)) return false;

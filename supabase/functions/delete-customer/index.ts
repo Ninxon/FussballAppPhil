@@ -46,11 +46,20 @@ Deno.serve(async (req) => {
     const { customerId } = await req.json();
     if (!customerId) return json({ error: 'customerId fehlt' }, 400);
 
-    // Remove all user data before auth delete to satisfy FK constraints
-    await serviceClient.from('cancellation_tokens').delete().eq('user_id', customerId);
-    await serviceClient.from('appointments').delete().eq('user_id', customerId);
-    await serviceClient.from('notifications').update({ created_by: null }).eq('created_by', customerId);
-    await serviceClient.from('appointments').update({ trainer_id: null }).eq('trainer_id', customerId);
+    // Remove all user data before auth delete to satisfy FK constraints.
+    // Abort on any failure so we never delete the auth user while related
+    // rows survive (which would orphan them / break FK assumptions).
+    const tokDel = await serviceClient.from('cancellation_tokens').delete().eq('user_id', customerId);
+    if (tokDel.error) return json({ error: `Stornierungstoken löschen fehlgeschlagen: ${tokDel.error.message}` }, 500);
+
+    const apptDel = await serviceClient.from('appointments').delete().eq('user_id', customerId);
+    if (apptDel.error) return json({ error: `Termine löschen fehlgeschlagen: ${apptDel.error.message}` }, 500);
+
+    const notifUpd = await serviceClient.from('notifications').update({ created_by: null }).eq('created_by', customerId);
+    if (notifUpd.error) return json({ error: `Benachrichtigungen bereinigen fehlgeschlagen: ${notifUpd.error.message}` }, 500);
+
+    const trainerRefUpd = await serviceClient.from('appointments').update({ trainer_id: null }).eq('trainer_id', customerId);
+    if (trainerRefUpd.error) return json({ error: `Trainer-Referenzen bereinigen fehlgeschlagen: ${trainerRefUpd.error.message}` }, 500);
 
     const { error: authError } = await serviceClient.auth.admin.deleteUser(customerId);
     if (authError) {
