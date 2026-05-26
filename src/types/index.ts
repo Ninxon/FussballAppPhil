@@ -10,6 +10,8 @@ export type Appointment = {
   trainer_id?: string | null;
   session_level?: string | null;
   session_birth_year?: number | null;
+  is_makeup?: boolean;
+  makeup_count?: number;
   created_at?: string;
 };
 

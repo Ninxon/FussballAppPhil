@@ -155,6 +155,10 @@ function getStyles(C: Colors) {
       alignItems: 'center', justifyContent: 'center',
     },
     stornBtnLabel: { fontSize: 13, fontWeight: '700', color: C.red },
+    makeupLockNote: {
+      paddingHorizontal: 20, paddingBottom: 14, paddingTop: 2,
+    },
+    makeupLockText: { fontSize: 12, color: C.textFaint, lineHeight: 17, fontStyle: 'italic' },
     deadlineErrorBox: {
       margin: 14, marginBottom: 0, padding: 14, borderRadius: 12,
       backgroundColor: C.redBg, borderWidth: 1, borderColor: C.red + '40',
@@ -203,6 +207,9 @@ function ApptCard({ appt, onCancel }: { appt: Appointment; onCancel: (id: string
   const upcoming = appt.status === 'confirmed' && !isPast;
   const program = PROGRAMS.find(p => p.id === appt.program);
   const programColor = PROGRAM_COLORS[appt.program] ?? C.accentLight;
+  // Ein Nachholtermin darf max. zweimal storniert-und-neu-gebucht werden
+  // (makeup_count 0 und 1). Danach nur noch der Trainer/Admin.
+  const cancelLocked = !!appt.is_makeup && (appt.makeup_count ?? 0) >= 2;
 
   const handleStornPress = () => {
     if (isWithinCancellationDeadline(appt.date, appt.time)) {
@@ -244,7 +251,20 @@ function ApptCard({ appt, onCancel }: { appt: Appointment; onCancel: (id: string
       </View>
 
       {upcoming && (
-        expanded ? (
+        cancelLocked ? (
+          <View>
+            <View style={styles.actionSection}>
+              <TouchableOpacity style={styles.calBtn} activeOpacity={0.8} onPress={() => exportToCalendar(appt).catch(console.error)}>
+                <Text style={styles.calBtnLabel}>In Kalender</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.makeupLockNote}>
+              <Text style={styles.makeupLockText}>
+                Nachholtermine kann nur dein Trainer stornieren – bitte melde dich bei uns.
+              </Text>
+            </View>
+          </View>
+        ) : expanded ? (
           <View style={styles.confirmSection}>
             <Text style={styles.confirmText}>Termin wirklich stornieren?</Text>
             <View style={styles.confirmBtns}>

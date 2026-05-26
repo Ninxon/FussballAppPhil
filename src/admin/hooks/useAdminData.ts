@@ -97,20 +97,24 @@ export function useAdminData() {
   const cancelAppointment = async (id: string) => {
     const { data, error } = await supabase.rpc('cancel_and_issue_token', { p_appointment_id: id, p_skip_token: false });
     if (error) return { error };
-    const result = data as { error?: string } | null;
+    const result = data as { error?: string; token?: unknown } | null;
     if (result?.error) return { error: { message: result.error } };
 
     const appt = allAppointments.find(a => a.id === id);
     if (appt) {
       const category = PROGRAM_CATEGORY[appt.program as ProgramId] ?? 'individual';
       setAllAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'cancelled' as const } : a));
-      setActiveTokensByCustomer(prev => ({
-        ...prev,
-        [appt.user_id]: {
-          individual: (prev[appt.user_id]?.individual ?? 0) + (category === 'individual' ? 1 : 0),
-          gruppe: (prev[appt.user_id]?.gruppe ?? 0) + (category === 'gruppe' ? 1 : 0),
-        },
-      }));
+      // Nachholtermin-Storno durch den Admin stellt keinen neuen Token aus
+      // (Server liefert dann kein token-Feld) — Zähler nur bei echtem Token bumpen.
+      if (result?.token) {
+        setActiveTokensByCustomer(prev => ({
+          ...prev,
+          [appt.user_id]: {
+            individual: (prev[appt.user_id]?.individual ?? 0) + (category === 'individual' ? 1 : 0),
+            gruppe: (prev[appt.user_id]?.gruppe ?? 0) + (category === 'gruppe' ? 1 : 0),
+          },
+        }));
+      }
     }
     return { error: null };
   };

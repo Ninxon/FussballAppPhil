@@ -60,6 +60,7 @@ Admins dürfen alle Zeilen lesen/schreiben. Kunden nur eigene.
 - Wochenenden (Sa + So) und deutsche Bundesfeiertage nicht buchbar.
 - **Buchungsberechtigung:** Kunde kann nur Programme buchen, für die Admin das Flag gesetzt hat (`can_book_*`).
 - **Stornierungstoken:** Bei Stornierung wird ein Token ausgestellt (gleiche Kategorie, 1 Monat gültig). Token erlaubt eine zusätzliche Buchung (kein separates Kontingent — Token sind das einzige Buchungslimit).
+- **Nachholtermin-Storno-Limit:** Per Token gebuchte Termine sind `is_makeup = true` und tragen einen Ketten-Zähler `makeup_count`. Ein Kunde darf einen Nachholtermin **max. zweimal** stornieren-und-neu-buchen (`makeup_count` 0 und 1); ab `makeup_count >= 2` lehnt `cancel_and_issue_token` die Kunden-Stornierung ab (nur Admin). Ein **Admin-Storno eines Nachholtermins stellt keinen neuen Token aus** (verhindert die Endlosschleife).
 - Slot-Kapazität per DB-Trigger (Individual: 1, Gruppe/Athletik/Torwart-Gruppe: 4).
 
 **Admin bucht ohne Einschränkungen** (`addAppointmentForCustomer` überspringt alle Checks).
