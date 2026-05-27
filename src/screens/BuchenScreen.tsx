@@ -412,7 +412,7 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
             <View style={styles.weekRow}>
               {DE_DAYS_SHORT.map(d => (
                 <View key={d} style={styles.weekCell}>
-                  <Text style={styles.weekLabel}>{d}</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={styles.weekLabel}>{d}</Text>
                 </View>
               ))}
             </View>
@@ -437,7 +437,7 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
                     activeOpacity={0.7}
                     style={[styles.dayCell, isSel && styles.dayCellSelected, isToday && !isSel && styles.dayCellToday]}
                   >
-                    <Text style={[styles.dayText, disabled && styles.dayTextDisabled, isSel && styles.dayTextSelected, isToday && !isSel && styles.dayTextToday]}>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.dayText, disabled && styles.dayTextDisabled, isSel && styles.dayTextSelected, isToday && !isSel && styles.dayTextToday]}>
                       {d}
                     </Text>
                     {isUserBooked && !disabled && <View style={styles.bookedDot} />}
@@ -520,13 +520,13 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
                   activeOpacity={0.8}
                   style={[styles.slot, sel && styles.slotSelected, full && styles.slotFull]}
                 >
-                  <Text style={[styles.slotTime, full && styles.slotTimeDimmed, sel && styles.slotTimeSelected]}>{entry.time}</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.slotTime, full && styles.slotTimeDimmed, sel && styles.slotTimeSelected]}>{entry.time}</Text>
                   {entry.location && (
-                    <Text style={[styles.slotLoc, { color: sel ? 'rgba(255,255,255,0.85)' : LOC_COLOR[entry.location] }]}>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.slotLoc, { color: sel ? 'rgba(255,255,255,0.85)' : LOC_COLOR[entry.location] }]}>
                       {entry.location}
                     </Text>
                   )}
-                  <Text style={[styles.slotSub, full && styles.slotSubDimmed,
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.slotSub, full && styles.slotSubDimmed,
                     sel && styles.slotSubSelected,
                     !full && isGroup && freeInGroup === 1 && { color: '#D97706' }]}>
                     {subLabel}
@@ -714,7 +714,7 @@ function getStyles(C: Colors) {
     },
     programCtaText: { fontSize: 14, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
     monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: C.cardBorder },
-    navBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.accentBg, borderWidth: 1, borderColor: C.cardBorder, alignItems: 'center', justifyContent: 'center' },
+    navBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: C.accentBg, borderWidth: 1, borderColor: C.cardBorder, alignItems: 'center', justifyContent: 'center' },
     navBtnText: { fontSize: 20, fontWeight: '700', color: C.accent },
     monthLabel: { fontSize: 17, fontWeight: '700', color: C.text },
     calBody: { padding: 14, paddingBottom: 16 },

@@ -106,8 +106,8 @@ function getStyles(C: Colors) {
       borderRadius: 2,
       backgroundColor: C.accent,
     },
-    itemLabelActive: { fontSize: 9, fontWeight: '700', color: C.accent, letterSpacing: 0.05 },
-    itemLabelInactive: { fontSize: 9, fontWeight: '500', color: C.textFaint, letterSpacing: 0.05 },
+    itemLabelActive: { fontSize: 10, fontWeight: '700', color: C.accent, letterSpacing: 0.05 },
+    itemLabelInactive: { fontSize: 10, fontWeight: '500', color: C.textFaint, letterSpacing: 0.05 },
   });
 }
 
@@ -130,7 +130,7 @@ export function BottomNav({ tab, setTab }: Props) {
             {id === 'buchen' && <PlusIcon active={active} C={C} />}
             {id === 'infos' && <InfoIcon active={active} C={C} />}
             {id === 'profil' && <ProfilIcon active={active} C={C} />}
-            <Text style={labelStyle} numberOfLines={1}>{label}</Text>
+            <Text style={labelStyle} numberOfLines={1} maxFontSizeMultiplier={1.2}>{label}</Text>
           </TouchableOpacity>
         );
       })}
