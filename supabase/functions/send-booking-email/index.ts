@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Nicht autorisiert' }), { status: 401, headers: { ...cors, 'Content-Type': 'application/json' } });
   }
 
-  const { name, date, time, program } = await req.json();
+  const { name, date, time, program, location } = await req.json();
   const email = user.email;
   if (!email) {
     return new Response(JSON.stringify({ error: 'Keine E-Mail-Adresse hinterlegt' }), { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } });
@@ -55,6 +55,10 @@ Deno.serve(async (req) => {
   const safeDate = dateParts.length === 3
     ? `${dateParts[2]}.${dateParts[1]}.${dateParts[0]}`
     : rawDate;
+  const safeLocation = (location ?? '').replace(/[<>]/g, '').slice(0, 40);
+  const locationRow = safeLocation
+    ? `<tr><td style="color:#666;padding:6px 0">Standort</td><td><strong>${safeLocation}</strong></td></tr>`
+    : '';
 
   await transporter.sendMail({
     from: `"PK Fußballschule" <${Deno.env.get('GMAIL_USER')}>`,
@@ -68,6 +72,7 @@ Deno.serve(async (req) => {
           <tr><td style="color:#666;padding:6px 0">Leistung</td><td><strong>${programName}</strong></td></tr>
           <tr><td style="color:#666;padding:6px 0">Datum</td><td><strong>${safeDate}</strong></td></tr>
           <tr><td style="color:#666;padding:6px 0">Uhrzeit</td><td><strong>${safeTime} Uhr</strong></td></tr>
+          ${locationRow}
         </table>
         <p style="color:#888;font-size:14px;margin-top:24px">Wir freuen uns auf dich!<br>Dein PK Fußballschule Team</p>
       </div>

@@ -12,11 +12,13 @@ import { GlassCard } from '../components/GlassCard';
 import { Btn } from '../components/Btn';
 import { Appointment, SlotCount, SlotPlayer, CancellationToken, Tab, TrainerSchedule } from '../types';
 import { todayStr, fmtDate, fmtShort, DE_MONTHS, DE_DAYS_SHORT } from '../constants/i18n';
-import { SLOTS } from '../constants/slots';
 import { PROGRAMS, PROGRAM_CATEGORY, CATEGORY_COLORS, ProgramId } from '../constants/programs';
 import { PROGRAM_IMAGES } from '../constants/programImages';
 import { Profile } from '../hooks/useProfile';
 import { germanHolidays, canJoinGroupSlot, reconstructGroups } from '../utils/bookingRules';
+import { LOCATIONS, Location } from '../constants/studio';
+
+const LOC_COLOR: Record<Location, string> = { 'Rüsselsheim': '#4A8FE8', 'Kelsterbach': '#5A8C6A' };
 
 interface Props {
   slotCounts: SlotCount[];
@@ -70,6 +72,23 @@ function SectionTitle({ t, sub }: { t: string; sub?: string }) {
   );
 }
 
+function FilterChip({ label, active, color, onPress }: { label: string; active: boolean; color?: string; onPress: () => void }) {
+  const { C } = useTheme();
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.8}
+      style={{
+        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, borderWidth: 1.5,
+        borderColor: active ? (color ?? C.accent) : C.cardBorder,
+        backgroundColor: active ? (color ?? C.accent) : C.card,
+      }}
+    >
+      <Text style={{ fontSize: 13, fontWeight: '700', color: active ? '#fff' : C.textMid }}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 const TORWART_PROGRAMS = new Set(['torhueter_individual', 'torhueter_gruppe']);
 const FELD_PROGRAMS = new Set(['individual', 'gruppe', 'athletik']);
 
@@ -97,6 +116,8 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
   const [selProgram, setSelProgram] = useState<ProgramId | null>(null);
   const [selDate, setSelDate] = useState<string | null>(null);
   const [selTime, setSelTime] = useState<string | null>(null);
+  const [selLocation, setSelLocation] = useState<Location | null>(null);
+  const [locFilter, setLocFilter] = useState<'alle' | Location>('alle');
   const [calM, setCalM] = useState(new Date().getMonth());
   const [calY, setCalY] = useState(new Date().getFullYear());
   const [bookingError, setBookingError] = useState<string | null>(null);
@@ -154,29 +175,34 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
     const baseCapacity = currentProgram?.capacity ?? 1;
     const TORWART_IDS = ['torhueter_individual', 'torhueter_gruppe'];
     const neededSpecialty = selProgram && TORWART_IDS.includes(selProgram) ? 'torwart' : 'spieler';
-    const jsDay = selDate ? new Date(selDate).getDay() : 0;
+    const jsDay = selDate ? new Date(selDate + 'T12:00:00').getDay() : 0;
     const dayOfWeek = jsDay === 0 ? 7 : jsDay;
     const relevantIds = trainers
       .filter(t => t.trainer_specialty === neededSpecialty)
       .map(t => t.id);
 
-    // Each matching schedule row is one trainer covering that time → +baseCapacity.
-    const capacityByTime = new Map<string, number>();
+    // Kapazität pro (Uhrzeit, Standort): jede passende Trainer-Zeile zählt
+    // +baseCapacity für ihren Standort. location null = noch nicht zugeordnet
+    // (Alt-Slot) — erscheint nur unter "Alle Standorte".
+    const byKey = new Map<string, { time: string; location: Location | null; capacity: number }>();
     for (const s of trainerSchedules) {
       if (relevantIds.includes(s.trainer_id) && s.day_of_week === dayOfWeek) {
-        capacityByTime.set(s.time, (capacityByTime.get(s.time) ?? 0) + baseCapacity);
+        const loc = (s.location ?? null) as Location | null;
+        const key = `${s.time}|${loc ?? ''}`;
+        const cur = byKey.get(key);
+        if (cur) cur.capacity += baseCapacity;
+        else byKey.set(key, { time: s.time, location: loc, capacity: baseCapacity });
       }
     }
 
-    // Only slots actually covered by a matching trainer are bookable. When no
-    // trainer of the needed specialty is scheduled (e.g. a Torwart program with
-    // no Torwart trainer), this is empty → "keine Zeiten verfügbar", which also
-    // matches the server rule (book_with_token rejects trainer-less slots).
-    const allowedSlots = SLOTS.filter(s => capacityByTime.has(s));
+    const slotEntries = [...byKey.values()].sort(
+      (a, b) => a.time.localeCompare(b.time) || (a.location ?? '').localeCompare(b.location ?? ''),
+    );
+    const availableLocations = LOCATIONS.filter(l => slotEntries.some(e => e.location === l));
+    const getSlotCapacity = (time: string, location: Location | null): number =>
+      byKey.get(`${time}|${location ?? ''}`)?.capacity ?? 0;
 
-    const getSlotCapacity = (time: string): number => capacityByTime.get(time) ?? 0;
-
-    return { relevantIds, allowedSlots, getSlotCapacity };
+    return { relevantIds, slotEntries, availableLocations, getSlotCapacity, baseCapacity };
   }, [currentProgram, selProgram, selDate, trainers, trainerSchedules]);
 
   const GROUP_SIZE = 4;
@@ -185,9 +211,11 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
   // agree. For groups the free count is the free spots in the *group the player
   // would actually join* (via reconstructGroups) — not the raw slot-wide count,
   // which mixes other trainers' parallel groups at the same time.
-  const slotAvailability = (time: string) => {
-    const totalCapacity = slotInfo.getSlotCapacity(time);
-    const booked = slotCounts.find(s => s.date === selDate && s.time === time && s.program === selProgram)?.booked ?? 0;
+  const slotAvailability = (time: string, location: Location | null) => {
+    const totalCapacity = slotInfo.getSlotCapacity(time, location);
+    const booked = slotCounts.find(s =>
+      s.date === selDate && s.time === time && s.program === selProgram &&
+      (s.location ?? null) === (location ?? null))?.booked ?? 0;
     const isGroup = selProgram ? PROGRAM_CATEGORY[selProgram] === 'gruppe' : false;
     const playerBirthYear = profile?.birth_date ? parseInt(profile.birth_date.slice(0, 4)) : null;
     const playerLevel = profile?.level ?? null;
@@ -197,11 +225,12 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
     let groupUnavailable = false;
     if (isGroup && playerBirthYear && playerLevel) {
       const existingPlayers = slotPlayers
-        .filter(p => p.date === selDate && p.time === time && p.program === selProgram)
+        .filter(p => p.date === selDate && p.time === time && p.program === selProgram &&
+          (p.location ?? null) === (location ?? null))
         .filter(p => p.session_birth_year != null && p.session_level)
         .map(p => ({ birthYear: p.session_birth_year!, level: p.session_level as any, created_at: p.created_at }));
       const groups = reconstructGroups(existingPlayers, GROUP_SIZE, sessionYear);
-      const trainerCount = slotInfo.relevantIds.length || 1;
+      const trainerCount = Math.max(1, Math.round(totalCapacity / GROUP_SIZE));
 
       let targetGroupIndex = -1;
       for (let i = 0; i < groups.length; i++) {
@@ -438,64 +467,74 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
     const playerBirthYear = profile?.birth_date ? parseInt(profile.birth_date.slice(0, 4)) : null;
     const playerLevel = profile?.level ?? null;
 
-    const { allowedSlots } = slotInfo;
-
-    const SlotGroup = ({ label, slots }: { label: string; slots: string[] }) => (
-      <View style={{ marginBottom: 20 }}>
-        <Text style={styles.slotGroupLabel}>{label}</Text>
-        <View style={styles.slotGrid}>
-          {slots.map(t => {
-            const { totalCapacity, booked, freeInGroup, groupUnavailable } = slotAvailability(t);
-            const userBooked = myAppointments.some(a => a.date === selDate && a.time === t && a.status === 'confirmed');
-            const isPast = isToday && t <= nowStr;
-
-            // Bookable group slot where no compatible group has room → hide it.
-            if (isGroup && groupUnavailable && !isPast && !userBooked && playerBirthYear && playerLevel) {
-              return null;
-            }
-
-            const full = booked >= totalCapacity || userBooked || isPast;
-            const sel = selTime === t;
-
-            const subLabel = (() => {
-              if (isPast) return 'Vergangen';
-              if (userBooked) return 'Bereits gebucht';
-              if (booked >= totalCapacity) return 'Ausgebucht';
-              if (isGroup) return freeInGroup === 1 ? '1 Platz frei' : `${freeInGroup} Plätze frei`;
-              return 'Verfügbar';
-            })();
-
-            return (
-              <TouchableOpacity
-                key={t}
-                disabled={full}
-                onPress={() => setSelTime(t)}
-                activeOpacity={0.8}
-                style={[styles.slot, sel && styles.slotSelected, full && styles.slotFull]}
-              >
-                <Text style={[styles.slotTime, full && styles.slotTimeDimmed, sel && styles.slotTimeSelected]}>{t}</Text>
-                <Text style={[styles.slotSub, full && styles.slotSubDimmed,
-                  sel && styles.slotSubSelected,
-                  !full && isGroup && freeInGroup === 1 && { color: '#D97706' }]}>
-                  {subLabel}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-    );
+    const { slotEntries, availableLocations } = slotInfo;
+    const visibleEntries = slotEntries.filter(e => locFilter === 'alle' || e.location === locFilter);
 
     return (
       <FadeUp>
         <BackBtn onPress={() => setStep('date')} />
         <SectionTitle t="Uhrzeit wählen" sub={selDate ? fmtShort(selDate) : ''} />
-        {allowedSlots.length === 0 ? (
+
+        {availableLocations.length > 0 && (
+          <View style={styles.filterRow}>
+            <FilterChip label="Alle Standorte" active={locFilter === 'alle'}
+              onPress={() => { setLocFilter('alle'); setSelTime(null); setSelLocation(null); }} />
+            {availableLocations.map(loc => (
+              <FilterChip key={loc} label={loc} color={LOC_COLOR[loc]} active={locFilter === loc}
+                onPress={() => { setLocFilter(loc); setSelTime(null); setSelLocation(null); }} />
+            ))}
+          </View>
+        )}
+
+        {visibleEntries.length === 0 ? (
           <Text style={{ color: C.textFaint, textAlign: 'center', marginTop: 24, fontSize: 15 }}>
             An diesem Tag sind keine Zeiten verfügbar.
           </Text>
         ) : (
-          <SlotGroup label="Verfügbare Zeiten" slots={allowedSlots} />
+          <View style={[styles.slotGrid, { marginBottom: 20 }]}>
+            {visibleEntries.map(entry => {
+              const { totalCapacity, booked, freeInGroup, groupUnavailable } = slotAvailability(entry.time, entry.location);
+              const userBooked = myAppointments.some(a => a.date === selDate && a.time === entry.time && a.status === 'confirmed');
+              const isPast = isToday && entry.time <= nowStr;
+
+              if (isGroup && groupUnavailable && !isPast && !userBooked && playerBirthYear && playerLevel) {
+                return null;
+              }
+
+              const full = booked >= totalCapacity || userBooked || isPast;
+              const sel = selTime === entry.time && (selLocation ?? null) === (entry.location ?? null);
+
+              const subLabel = (() => {
+                if (isPast) return 'Vergangen';
+                if (userBooked) return 'Bereits gebucht';
+                if (booked >= totalCapacity) return 'Ausgebucht';
+                if (isGroup) return freeInGroup === 1 ? '1 Platz frei' : `${freeInGroup} Plätze frei`;
+                return 'Verfügbar';
+              })();
+
+              return (
+                <TouchableOpacity
+                  key={`${entry.time}|${entry.location ?? ''}`}
+                  disabled={full}
+                  onPress={() => { setSelTime(entry.time); setSelLocation(entry.location); }}
+                  activeOpacity={0.8}
+                  style={[styles.slot, sel && styles.slotSelected, full && styles.slotFull]}
+                >
+                  <Text style={[styles.slotTime, full && styles.slotTimeDimmed, sel && styles.slotTimeSelected]}>{entry.time}</Text>
+                  {entry.location && (
+                    <Text style={[styles.slotLoc, { color: sel ? 'rgba(255,255,255,0.85)' : LOC_COLOR[entry.location] }]}>
+                      {entry.location}
+                    </Text>
+                  )}
+                  <Text style={[styles.slotSub, full && styles.slotSubDimmed,
+                    sel && styles.slotSubSelected,
+                    !full && isGroup && freeInGroup === 1 && { color: '#D97706' }]}>
+                    {subLabel}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         )}
         {selTime && <Btn label="Weiter" onPress={() => setStep('confirm')} variant="primary" />}
       </FadeUp>
@@ -504,7 +543,7 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
 
   // ── ConfirmStep ───────────────────────────────────────────────
   function ConfirmStep() {
-    const { totalCapacity, booked, isGroup, freeInGroup } = slotAvailability(selTime!);
+    const { totalCapacity, booked, isGroup, freeInGroup } = slotAvailability(selTime!, selLocation);
     // Mirror the time step: for groups show the free spots in the group the
     // player actually joins; for individual show the slot-wide free count.
     const availLabel = isGroup
@@ -512,7 +551,7 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
       : `${Math.max(0, totalCapacity - booked)} von ${totalCapacity} Plätzen frei`;
     const doBook = async () => {
       setBookingError(null);
-      const { error } = await addAppointment(selDate!, selTime!, selProgram!);
+      const { error } = await addAppointment(selDate!, selTime!, selProgram!, selLocation);
       if (error) {
         setBookingError(error.message ?? 'Buchung fehlgeschlagen.');
       } else {
@@ -523,6 +562,7 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
       ['Programm', currentProgram?.name ?? ''],
       ['Datum', fmtDate(selDate!)],
       ['Uhrzeit', `${selTime} Uhr`],
+      ...(selLocation ? [['Standort', selLocation] as [string, string]] : []),
       ['Dauer', `${currentProgram?.duration ?? 60} Minuten`],
       ['Verfügbar', availLabel],
     ];
@@ -558,6 +598,7 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
         <Text style={styles.doneMeta}>{currentProgram?.name}</Text>
         <Text style={styles.doneMeta}>{fmtDate(selDate!)}</Text>
         <Text style={styles.doneMeta}>{selTime} Uhr</Text>
+        {selLocation && <Text style={styles.doneMeta}>{selLocation}</Text>}
         <GlassCard style={styles.emailNote}>
           <Text style={styles.emailNoteText}>Bestätigung folgt per E-Mail</Text>
         </GlassCard>
@@ -689,9 +730,11 @@ function getStyles(C: Colors) {
     dayTextSelected: { color: '#fff', fontWeight: '700' },
     dayTextToday: { color: C.accent, fontWeight: '700' },
     slotGroupLabel: { fontSize: 12, fontWeight: '700', color: C.textFaint, textTransform: 'uppercase', letterSpacing: 0.1, marginBottom: 10 },
+    filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 18 },
+    slotLoc: { fontSize: 10, fontWeight: '700', marginTop: 2 },
     slotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     slot: {
-      width: '30.5%', height: 64, borderRadius: 14,
+      width: '30.5%', minHeight: 64, paddingVertical: 8, borderRadius: 14,
       alignItems: 'center', justifyContent: 'center',
       borderWidth: 1.5, borderColor: C.cardBorder,
       backgroundColor: C.card,

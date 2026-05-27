@@ -79,15 +79,16 @@ export function useAppointments(profile: Profile | null) {
         }
         if (appt.status === 'confirmed') {
           setSlotCounts(prev => {
-            const idx = prev.findIndex(s => s.date === appt.date && s.time === appt.time && s.program === appt.program);
+            const idx = prev.findIndex(s => s.date === appt.date && s.time === appt.time && s.program === appt.program && (s.location ?? null) === (appt.location ?? null));
             if (idx !== -1) {
               return prev.map((s, i) => i === idx ? { ...s, booked: s.booked + 1 } : s);
             }
-            return [...prev, { date: appt.date, time: appt.time, program: appt.program, booked: 1 }];
+            return [...prev, { date: appt.date, time: appt.time, program: appt.program, location: appt.location ?? null, booked: 1 }];
           });
           if (appt.session_birth_year) {
             setSlotPlayers(prev => [...prev, {
               date: appt.date, time: appt.time, program: appt.program,
+              location: appt.location ?? null,
               session_birth_year: appt.session_birth_year!,
               session_level: appt.session_level ?? null,
               created_at: appt.created_at ?? new Date().toISOString(),
@@ -106,13 +107,14 @@ export function useAppointments(profile: Profile | null) {
             return;
           }
           setSlotCounts(prev => prev.map(s =>
-            s.date === appt.date && s.time === appt.time && s.program === appt.program
+            s.date === appt.date && s.time === appt.time && s.program === appt.program && (s.location ?? null) === (appt.location ?? null)
               ? { ...s, booked: Math.max(0, s.booked - 1) } : s
           ));
           if (appt.session_birth_year) {
             setSlotPlayers(prev => {
               const idx = prev.findIndex(p =>
                 p.date === appt.date && p.time === appt.time && p.program === appt.program &&
+                (p.location ?? null) === (appt.location ?? null) &&
                 p.session_birth_year === appt.session_birth_year
               );
               if (idx === -1) return prev;
@@ -121,9 +123,9 @@ export function useAppointments(profile: Profile | null) {
           }
         } else if (old.status === 'cancelled' && appt.status === 'confirmed') {
           setSlotCounts(prev => {
-            const idx = prev.findIndex(s => s.date === appt.date && s.time === appt.time && s.program === appt.program);
+            const idx = prev.findIndex(s => s.date === appt.date && s.time === appt.time && s.program === appt.program && (s.location ?? null) === (appt.location ?? null));
             if (idx !== -1) return prev.map((s, i) => i === idx ? { ...s, booked: s.booked + 1 } : s);
-            return [...prev, { date: appt.date, time: appt.time, program: appt.program, booked: 1 }];
+            return [...prev, { date: appt.date, time: appt.time, program: appt.program, location: appt.location ?? null, booked: 1 }];
           });
         }
       })
@@ -133,13 +135,14 @@ export function useAppointments(profile: Profile | null) {
         setMyAppointments(prev => prev.filter(a => a.id !== appt.id));
         if (appt.status === 'confirmed') {
           setSlotCounts(prev => prev.map(s =>
-            s.date === appt.date && s.time === appt.time && s.program === appt.program
+            s.date === appt.date && s.time === appt.time && s.program === appt.program && (s.location ?? null) === (appt.location ?? null)
               ? { ...s, booked: Math.max(0, s.booked - 1) } : s
           ));
           if (appt.session_birth_year) {
             setSlotPlayers(prev => {
               const idx = prev.findIndex(p =>
                 p.date === appt.date && p.time === appt.time && p.program === appt.program &&
+                (p.location ?? null) === (appt.location ?? null) &&
                 p.session_birth_year === appt.session_birth_year
               );
               if (idx === -1) return prev;
@@ -166,7 +169,10 @@ export function useAppointments(profile: Profile | null) {
     if (playersData.data) setSlotPlayers(playersData.data as SlotPlayer[]);
   }, []);
 
-  const addAppointment = async (date: string, time: string, program: string) => {
+  const addAppointment = async (
+    date: string, time: string, program: string,
+    location: 'Rüsselsheim' | 'Kelsterbach' | null = null,
+  ) => {
     const { data: { session } } = await supabase.auth.getSession();
     const user = session?.user;
     if (!user) return { error: { message: 'Nicht eingeloggt.' } };
@@ -199,6 +205,7 @@ export function useAppointments(profile: Profile | null) {
       p_date: date,
       p_time: time,
       p_program: program,
+      p_location: location,
     });
 
     if (error) return { error };
@@ -211,13 +218,14 @@ export function useAppointments(profile: Profile | null) {
       optimisticallyHandledRef.current.add(newAppt.id);
       setMyAppointments(prev => prev.some(a => a.id === newAppt.id) ? prev : [...prev, newAppt]);
       setSlotCounts(prev => {
-        const idx = prev.findIndex(s => s.date === date && s.time === time && s.program === program);
+        const idx = prev.findIndex(s => s.date === date && s.time === time && s.program === program && (s.location ?? null) === (location ?? null));
         if (idx !== -1) return prev.map((s, i) => i === idx ? { ...s, booked: s.booked + 1 } : s);
-        return [...prev, { date, time, program, booked: 1 }];
+        return [...prev, { date, time, program, location: location ?? null, booked: 1 }];
       });
       if (newAppt.session_birth_year) {
         setSlotPlayers(prev => [...prev, {
           date, time, program,
+          location: location ?? null,
           session_birth_year: newAppt.session_birth_year!,
           session_level: newAppt.session_level ?? null,
           created_at: newAppt.created_at ?? new Date().toISOString(),
@@ -228,7 +236,7 @@ export function useAppointments(profile: Profile | null) {
 
     EmailService.sendBooking({
       name: profile?.full_name ?? '',
-      date, time, program,
+      date, time, program, location: location ?? undefined,
     });
 
     return { error: null };
@@ -254,7 +262,7 @@ export function useAppointments(profile: Profile | null) {
       // Register before optimistic update so Realtime UPDATE handler skips double-decrement
       optimisticallyHandledCancelRef.current.add(id);
       setSlotCounts(prev => prev.map(s =>
-        s.date === appt.date && s.time === appt.time && s.program === appt.program
+        s.date === appt.date && s.time === appt.time && s.program === appt.program && (s.location ?? null) === (appt.location ?? null)
           ? { ...s, booked: Math.max(0, s.booked - 1) } : s
       ));
       if (appt.session_birth_year) {

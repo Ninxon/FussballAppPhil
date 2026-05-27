@@ -44,7 +44,7 @@ export function AdminApp({ onLogout }: Props) {
     cancelAppointment, addAppointmentForCustomer,
     createCustomer, deleteCustomer,
     saveCustomerLevel, saveBookingPermissions, saveCustomerProfile,
-    toggleScheduleSlot, createTrainer, updateTrainer, deleteTrainer,
+    setScheduleSlot, createTrainer, updateTrainer, deleteTrainer,
     markAttended,
   } = useAdminData();
 
@@ -152,7 +152,7 @@ export function AdminApp({ onLogout }: Props) {
         <ZeitplanScreen
           trainers={trainers}
           trainerSchedules={trainerSchedules}
-          onToggleSlot={toggleScheduleSlot}
+          onSetSlot={setScheduleSlot}
           onCreateTrainer={createTrainer}
           onUpdateTrainer={updateTrainer}
           onDeleteTrainer={deleteTrainer}

@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 
-type BookingEmailData = { name: string; date: string; time: string; program: string };
+type BookingEmailData = { name: string; date: string; time: string; program: string; location?: string | null };
 
 async function call(fnName: string, body: BookingEmailData): Promise<void> {
   try {

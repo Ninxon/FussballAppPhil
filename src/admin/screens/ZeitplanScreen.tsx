@@ -3,6 +3,19 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Activi
 import { TrainerSchedule, TrainerSpecialty } from '../../types';
 import { TrainerProfile } from '../hooks/useAdminData';
 import { SLOTS } from '../../constants/slots';
+import { LOCATIONS, Location } from '../../constants/studio';
+
+const LOC_SHORT: Record<Location, string> = { 'Rüsselsheim': 'R', 'Kelsterbach': 'K' };
+const LOC_COLOR: Record<Location, string> = { 'Rüsselsheim': '#4A8FE8', 'Kelsterbach': '#5A8C6A' };
+
+// Zyklus pro Zelle: aus → Rüsselsheim → Kelsterbach → aus.
+// Ein Alt-Slot ohne Standort (location null) wird beim ersten Tippen zugeordnet.
+function nextLocation(current: Location | null | undefined, hasRow: boolean): Location | null {
+  if (!hasRow) return LOCATIONS[0];
+  if (current == null) return LOCATIONS[0];
+  const idx = LOCATIONS.indexOf(current);
+  return idx < LOCATIONS.length - 1 ? LOCATIONS[idx + 1] : null;
+}
 
 const DAYS: { label: string; value: number }[] = [
   { label: 'Mo', value: 1 },
@@ -25,13 +38,13 @@ const SPECIALTY_COLOR: Record<TrainerSpecialty, string> = {
 interface Props {
   trainers: TrainerProfile[];
   trainerSchedules: TrainerSchedule[];
-  onToggleSlot: (trainerId: string, day: number, time: string) => Promise<{ error: unknown }>;
+  onSetSlot: (trainerId: string, day: number, time: string, location: Location | null) => Promise<{ error: unknown }>;
   onCreateTrainer: (params: { full_name: string; email: string; specialty: TrainerSpecialty }) => Promise<{ error: string | null; tempPassword?: string }>;
   onUpdateTrainer: (trainerId: string, params: { full_name: string; trainer_specialty: TrainerSpecialty }) => Promise<{ error: string | null }>;
   onDeleteTrainer: (trainerId: string) => Promise<{ error: string | null; cancelledCount?: number }>;
 }
 
-export function ZeitplanScreen({ trainers, trainerSchedules, onToggleSlot, onCreateTrainer, onUpdateTrainer, onDeleteTrainer }: Props) {
+export function ZeitplanScreen({ trainers, trainerSchedules, onSetSlot, onCreateTrainer, onUpdateTrainer, onDeleteTrainer }: Props) {
   const [selectedTrainerId, setSelectedTrainerId] = useState<string | null>(
     trainers.length > 0 ? trainers[0].id : null,
   );
@@ -61,16 +74,18 @@ export function ZeitplanScreen({ trainers, trainerSchedules, onToggleSlot, onCre
 
   const selectedTrainer = trainers.find(t => t.id === selectedTrainerId) ?? null;
 
-  const isActive = (day: number, time: string) =>
-    trainerSchedules.some(
+  const slotRow = (day: number, time: string) =>
+    trainerSchedules.find(
       s => s.trainer_id === selectedTrainerId && s.day_of_week === day && s.time === time,
     );
 
-  const handleToggle = async (day: number, time: string) => {
+  const handleCycle = async (day: number, time: string) => {
     if (!selectedTrainerId) return;
+    const row = slotRow(day, time);
+    const next = nextLocation(row?.location ?? null, !!row);
     const key = `${day}-${time}`;
     setToggling(key);
-    await onToggleSlot(selectedTrainerId, day, time);
+    await onSetSlot(selectedTrainerId, day, time, next);
     setToggling(null);
   };
 
@@ -328,6 +343,23 @@ export function ZeitplanScreen({ trainers, trainerSchedules, onToggleSlot, onCre
       )}
 
       {/* Wochenraster */}
+      {selectedTrainer && (
+        <View style={styles.legend}>
+          <Text style={styles.legendHint}>Tippen wechselt: Aus → Rüsselsheim → Kelsterbach → Aus</Text>
+          <View style={styles.legendRow}>
+            {LOCATIONS.map(loc => (
+              <View key={loc} style={styles.legendItem}>
+                <Text style={[styles.legendDot, { color: LOC_COLOR[loc] }]}>{LOC_SHORT[loc]}</Text>
+                <Text style={styles.legendLabel}>{loc}</Text>
+              </View>
+            ))}
+            <View style={styles.legendItem}>
+              <Text style={[styles.legendDot, { color: '#F5A84A' }]}>●</Text>
+              <Text style={styles.legendLabel}>Standort fehlt</Text>
+            </View>
+          </View>
+        </View>
+      )}
       {selectedTrainer ? (
         <View style={styles.grid}>
           <View style={styles.gridRow}>
@@ -345,20 +377,23 @@ export function ZeitplanScreen({ trainers, trainerSchedules, onToggleSlot, onCre
                 <Text style={styles.timeCellText}>{time}</Text>
               </View>
               {DAYS.map(d => {
-                const active = isActive(d.value, time);
+                const row = slotRow(d.value, time);
+                const loc = row?.location ?? null;
                 const key = `${d.value}-${time}`;
                 const loading = toggling === key;
+                const label = loc ? LOC_SHORT[loc] : row ? '●' : '○';
+                const color = loc ? LOC_COLOR[loc] : row ? '#F5A84A' : '#D1D5DB';
                 return (
                   <TouchableOpacity
                     key={d.value}
-                    style={[styles.cell, active ? styles.cellActive : styles.cellInactive]}
-                    onPress={() => handleToggle(d.value, time)}
+                    style={[styles.cell, row ? styles.cellActive : styles.cellInactive]}
+                    onPress={() => handleCycle(d.value, time)}
                     activeOpacity={0.7}
                   >
                     {loading
-                      ? <ActivityIndicator size="small" color={active ? '#fff' : '#5A8C6A'} />
-                      : <Text style={[styles.cellDot, active ? styles.cellDotActive : styles.cellDotInactive]}>
-                          {active ? '●' : '○'}
+                      ? <ActivityIndicator size="small" color={color} />
+                      : <Text style={[styles.cellDot, { color, fontWeight: loc ? '800' : '400' }]}>
+                          {label}
                         </Text>
                     }
                   </TouchableOpacity>
@@ -423,6 +458,13 @@ const styles = StyleSheet.create({
 
   successBox: { backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#86EFAC', borderRadius: 8, padding: 12, marginBottom: 16 },
   successText: { color: '#15803D', fontSize: 13, fontWeight: '600' },
+
+  legend: { marginBottom: 10 },
+  legendHint: { fontSize: 12, color: '#4A6080', marginBottom: 6 },
+  legendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  legendDot: { fontSize: 14, fontWeight: '800' },
+  legendLabel: { fontSize: 12, color: '#4A6080' },
 
   grid: { backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(21,34,56,0.08)' },
   gridRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#EEF3FB' },

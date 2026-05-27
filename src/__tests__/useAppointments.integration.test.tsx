@@ -324,6 +324,7 @@ describe('addAppointment — Erfolgspfad', () => {
       p_date: '2099-07-01',
       p_time: '10:00',
       p_program: 'individual',
+      p_location: null,
     });
   });
 

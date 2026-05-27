@@ -12,6 +12,7 @@ export type Appointment = {
   session_birth_year?: number | null;
   is_makeup?: boolean;
   makeup_count?: number;
+  location?: 'Rüsselsheim' | 'Kelsterbach' | null;
   created_at?: string;
 };
 
@@ -25,6 +26,7 @@ export type TrainerSchedule = {
   trainer_id: string;
   day_of_week: number;
   time: string;
+  location?: 'Rüsselsheim' | 'Kelsterbach' | null;
 };
 
 export type PlayerLevel = 'anfaenger' | 'amateur' | 'profi' | 'experte';
@@ -77,6 +79,7 @@ export type SlotCount = {
   date: string;
   time: string;
   program: string;
+  location: 'Rüsselsheim' | 'Kelsterbach' | null;
   booked: number;
 };
 
@@ -84,6 +87,7 @@ export type SlotPlayer = {
   date: string;
   time: string;
   program: string;
+  location: 'Rüsselsheim' | 'Kelsterbach' | null;
   session_birth_year: number;
   session_level: string | null;
   created_at: string;

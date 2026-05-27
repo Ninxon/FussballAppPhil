@@ -36,6 +36,7 @@ export type AdminAppointment = {
   session_level?: string | null;
   session_birth_year?: number | null;
   attended?: boolean | null;
+  location?: string | null;
 };
 
 export type TrainerProfile = {
@@ -200,11 +201,19 @@ export function useAdminData() {
       }
     }
 
+    // Standort folgt dem gewählten Trainer-Slot (location des Zeitplan-Eintrags).
+    const jsDayLoc = new Date(date + 'T12:00:00').getDay();
+    const dowLoc = jsDayLoc === 0 ? 7 : jsDayLoc;
+    const slotLocation = trainerId
+      ? (trainerSchedules.find(s => s.trainer_id === trainerId && s.day_of_week === dowLoc && s.time === time)?.location ?? null)
+      : null;
+
     const { data, error } = await AppointmentService.insert({
       user_id: userId, date, time, status: 'confirmed', program,
       ...(trainerId ? { trainer_id: trainerId } : {}),
       ...(birthYear ? { session_birth_year: birthYear } : {}),
       ...(level ? { session_level: level } : {}),
+      ...(slotLocation ? { location: slotLocation } : {}),
     });
 
     if (data && !error) {
@@ -273,11 +282,12 @@ export function useAdminData() {
     return { error };
   };
 
-  const toggleScheduleSlot = async (trainerId: string, day: number, time: string) => {
-    const exists = trainerSchedules.some(
-      s => s.trainer_id === trainerId && s.day_of_week === day && s.time === time,
-    );
-    if (exists) {
+  // location = null entfernt den Slot; ein Standort legt ihn an bzw. ändert
+  // den Standort eines bestehenden Slots (ein Standort pro Trainer-Slot).
+  const setScheduleSlot = async (
+    trainerId: string, day: number, time: string, location: 'Rüsselsheim' | 'Kelsterbach' | null,
+  ) => {
+    if (location === null) {
       const { error } = await TrainerScheduleService.deleteEntry(trainerId, day, time);
       if (!error) {
         setTrainerSchedules(prev =>
@@ -285,15 +295,19 @@ export function useAdminData() {
         );
       }
       return { error };
-    } else {
-      const { data, error } = await TrainerScheduleService.upsert({ trainer_id: trainerId, day_of_week: day, time });
-      if (!error && data) {
-        setTrainerSchedules(prev => [...prev, data as TrainerSchedule]);
-      } else if (!error) {
-        await load();
-      }
-      return { error };
     }
+    const { data, error } = await TrainerScheduleService.upsert({
+      trainer_id: trainerId, day_of_week: day, time, location,
+    });
+    if (!error && data) {
+      setTrainerSchedules(prev => [
+        ...prev.filter(s => !(s.trainer_id === trainerId && s.day_of_week === day && s.time === time)),
+        data as TrainerSchedule,
+      ]);
+    } else if (!error) {
+      await load();
+    }
+    return { error };
   };
 
   const createTrainer = async (params: {
@@ -364,7 +378,7 @@ export function useAdminData() {
     cancelAppointment, addAppointmentForCustomer,
     createCustomer, deleteCustomer,
     saveCustomerLevel, saveBookingPermissions, saveCustomerProfile,
-    toggleScheduleSlot, createTrainer, updateTrainer, deleteTrainer,
+    setScheduleSlot, createTrainer, updateTrainer, deleteTrainer,
     markAttended,
     reload: load,
   };

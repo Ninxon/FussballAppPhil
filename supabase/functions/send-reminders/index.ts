@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
   // Nur Termine, für die noch keine Erinnerung verschickt wurde (Idempotenz).
   const { data: appointments, error: fetchError } = await supabase
     .from('appointments')
-    .select('id, user_id, date, time, program')
+    .select('id, user_id, date, time, program, location')
     .eq('date', tomorrowStr)
     .eq('status', 'confirmed')
     .is('reminder_sent_at', null);
@@ -82,6 +82,10 @@ Deno.serve(async (req) => {
       const fmtDate = dateParts.length === 3
         ? `${dateParts[2]}.${dateParts[1]}.${dateParts[0]}`
         : appt.date;
+      const safeLocation = (appt.location ?? '').replace(/[<>]/g, '').slice(0, 40);
+      const locationRow = safeLocation
+        ? `<tr><td style="color:#666;padding:6px 0">Standort</td><td><strong>${safeLocation}</strong></td></tr>`
+        : '';
 
       await transporter.sendMail({
         from: `"PK Fußballschule" <${Deno.env.get('GMAIL_USER')}>`,
@@ -95,6 +99,7 @@ Deno.serve(async (req) => {
               <tr><td style="color:#666;padding:6px 0">Leistung</td><td><strong>${programName}</strong></td></tr>
               <tr><td style="color:#666;padding:6px 0">Datum</td><td><strong>${fmtDate}</strong></td></tr>
               <tr><td style="color:#666;padding:6px 0">Uhrzeit</td><td><strong>${(appt.time as string).slice(0, 5)} Uhr</strong></td></tr>
+              ${locationRow}
             </table>
             <p style="color:#888;font-size:14px;margin-top:24px">Bis morgen!<br>Dein PK Fußballschule Team</p>
           </div>

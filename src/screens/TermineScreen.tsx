@@ -263,6 +263,12 @@ function ApptCard({ appt, onCancel }: { appt: Appointment; onCancel: (id: string
             <Text style={styles.apptMetaLabel}>Uhrzeit</Text>
             <Text style={styles.apptMetaText}>{appt.time} Uhr</Text>
           </View>
+          {appt.location && (
+            <View style={styles.apptMeta}>
+              <Text style={styles.apptMetaLabel}>Standort</Text>
+              <Text style={styles.apptMetaText}>{appt.location}</Text>
+            </View>
+          )}
         </View>
       </View>
 
