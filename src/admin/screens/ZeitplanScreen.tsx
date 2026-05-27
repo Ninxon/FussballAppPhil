@@ -8,11 +8,10 @@ import { LOCATIONS, Location } from '../../constants/studio';
 const LOC_SHORT: Record<Location, string> = { 'Rüsselsheim': 'R', 'Kelsterbach': 'K' };
 const LOC_COLOR: Record<Location, string> = { 'Rüsselsheim': '#4A8FE8', 'Kelsterbach': '#5A8C6A' };
 
-// Zyklus pro Zelle: aus → Rüsselsheim → Kelsterbach → aus.
-// Ein Alt-Slot ohne Standort (location null) wird beim ersten Tippen zugeordnet.
+// Zyklus pro Zelle: Aus → Rüsselsheim → Kelsterbach → Aus.
+// "Aus" bedeutet keine Slot-Zeile; jeder vorhandene Slot hat einen Standort.
 function nextLocation(current: Location | null | undefined, hasRow: boolean): Location | null {
-  if (!hasRow) return LOCATIONS[0];
-  if (current == null) return LOCATIONS[0];
+  if (!hasRow || current == null) return LOCATIONS[0];
   const idx = LOCATIONS.indexOf(current);
   return idx < LOCATIONS.length - 1 ? LOCATIONS[idx + 1] : null;
 }
@@ -370,10 +369,6 @@ export function ZeitplanScreen({ trainers, trainerSchedules, onSetSlot, onCreate
                 <Text style={styles.legendLabel}>{loc}</Text>
               </View>
             ))}
-            <View style={styles.legendItem}>
-              <Text style={[styles.legendDot, { color: '#F5A84A' }]}>●</Text>
-              <Text style={styles.legendLabel}>Standort fehlt</Text>
-            </View>
           </View>
         </View>
       )}
@@ -398,8 +393,8 @@ export function ZeitplanScreen({ trainers, trainerSchedules, onSetSlot, onCreate
                 const loc = row?.location ?? null;
                 const key = `${d.value}-${time}`;
                 const loading = toggling === key;
-                const label = loc ? LOC_SHORT[loc] : row ? '●' : '○';
-                const color = loc ? LOC_COLOR[loc] : row ? '#F5A84A' : '#D1D5DB';
+                const label = loc ? LOC_SHORT[loc] : '○';
+                const color = loc ? LOC_COLOR[loc] : '#D1D5DB';
                 return (
                   <TouchableOpacity
                     key={d.value}
