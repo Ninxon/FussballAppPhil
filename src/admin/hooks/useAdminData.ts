@@ -300,9 +300,10 @@ export function useAdminData() {
       trainer_id: trainerId, day_of_week: day, time, location,
     });
     if (!error && data) {
+      const fresh = fmtTime(data as TrainerSchedule);
       setTrainerSchedules(prev => [
         ...prev.filter(s => !(s.trainer_id === trainerId && s.day_of_week === day && s.time === time)),
-        data as TrainerSchedule,
+        fresh,
       ]);
     } else if (!error) {
       await load();
