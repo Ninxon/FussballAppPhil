@@ -10,8 +10,13 @@ describe('todayStr', () => {
     expect(todayStr()).toHaveLength(10);
   });
 
-  it('matches current date', () => {
-    const expected = new Date().toISOString().split('T')[0];
+  it('matches current local date (midnight-safe)', () => {
+    // todayStr() nutzt lokale Datumskomponenten — expected ebenso berechnen,
+    // nicht via toISOString() (UTC), sonst bricht der Test um Mitternacht,
+    // wenn lokale Zeitzone und UTC auf unterschiedlichen Tagen liegen.
+    const now = new Date();
+    const expected =
+      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     expect(todayStr()).toBe(expected);
   });
 });
