@@ -284,9 +284,16 @@ export function useAdminData() {
 
   // location = null entfernt den Slot; ein Standort legt ihn an bzw. ändert
   // den Standort eines bestehenden Slots (ein Standort pro Trainer-Slot).
+  // Bei Standort-Wechsel zieht ein DB-Trigger zukünftige Termine mit; danach
+  // benachrichtigen wir die betroffenen Kunden per E-Mail.
   const setScheduleSlot = async (
     trainerId: string, day: number, time: string, location: 'Rüsselsheim' | 'Kelsterbach' | null,
   ) => {
+    const previous = trainerSchedules.find(
+      s => s.trainer_id === trainerId && s.day_of_week === day && s.time === time,
+    );
+    const previousLocation = previous?.location ?? null;
+
     if (location === null) {
       const { error } = await TrainerScheduleService.deleteEntry(trainerId, day, time);
       if (!error) {
@@ -308,6 +315,17 @@ export function useAdminData() {
     } else if (!error) {
       await load();
     }
+
+    // Standort-Wechsel auf eine existierende Slot-Zeile: Kunden informieren.
+    // Ein frischer Slot (previous == null) kann keine Bestandstermine haben.
+    if (!error && previous && previousLocation !== location) {
+      supabase.functions
+        .invoke('notify-location-change', {
+          body: { trainer_id: trainerId, day_of_week: day, time, new_location: location },
+        })
+        .catch(e => console.warn('notify-location-change fehlgeschlagen:', e));
+    }
+
     return { error };
   };
 

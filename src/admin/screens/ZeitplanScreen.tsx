@@ -49,6 +49,7 @@ export function ZeitplanScreen({ trainers, trainerSchedules, onSetSlot, onCreate
     trainers.length > 0 ? trainers[0].id : null,
   );
   const [toggling, setToggling] = useState<string | null>(null);
+  const [slotError, setSlotError] = useState<string | null>(null);
 
   // Anlegen
   const [showForm, setShowForm] = useState(false);
@@ -85,8 +86,15 @@ export function ZeitplanScreen({ trainers, trainerSchedules, onSetSlot, onCreate
     const next = nextLocation(row?.location ?? null, !!row);
     const key = `${day}-${time}`;
     setToggling(key);
-    await onSetSlot(selectedTrainerId, day, time, next);
+    setSlotError(null);
+    const { error } = await onSetSlot(selectedTrainerId, day, time, next);
     setToggling(null);
+    if (error) {
+      const msg = (error as { message?: string })?.message ?? String(error);
+      // PostgREST hängt teils Tabellen-Präfixe oder SQL-Codes an — wir zeigen
+      // die reine Trigger-Botschaft, wenn wir sie isolieren können.
+      setSlotError(msg.replace(/^.*?:\s*/, ''));
+    }
   };
 
   const handleCreate = async () => {
@@ -342,6 +350,15 @@ export function ZeitplanScreen({ trainers, trainerSchedules, onSetSlot, onCreate
         </View>
       )}
 
+      {slotError && (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorBoxText}>{slotError}</Text>
+          <TouchableOpacity onPress={() => setSlotError(null)} activeOpacity={0.7}>
+            <Text style={styles.errorBoxDismiss}>Schließen</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Wochenraster */}
       {selectedTrainer && (
         <View style={styles.legend}>
@@ -458,6 +475,10 @@ const styles = StyleSheet.create({
 
   successBox: { backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#86EFAC', borderRadius: 8, padding: 12, marginBottom: 16 },
   successText: { color: '#15803D', fontSize: 13, fontWeight: '600' },
+
+  errorBox: { backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', borderRadius: 8, padding: 12, marginBottom: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  errorBoxText: { color: '#991B1B', fontSize: 13, fontWeight: '600', flex: 1 },
+  errorBoxDismiss: { color: '#991B1B', fontSize: 12, fontWeight: '700', textDecorationLine: 'underline' },
 
   legend: { marginBottom: 10 },
   legendHint: { fontSize: 12, color: '#4A6080', marginBottom: 6 },
