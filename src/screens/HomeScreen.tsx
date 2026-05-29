@@ -225,7 +225,7 @@ export function HomeScreen({ appointments, profile, activeTokens, setTab }: Prop
 
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + 28 }]}>
-          <Text style={styles.headerSub}>PK Fußballschule</Text>
+          <Text style={styles.headerSub}>PK Fussballschule</Text>
           <Text style={styles.headerTitle}>Guten Tag,{'\n'}{firstName}!</Text>
         </View>
 

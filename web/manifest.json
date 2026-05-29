@@ -1,7 +1,7 @@
 {
-  "name": "PK-Fußballschule",
+  "name": "PK-Fussballschule",
   "short_name": "PK-Fußball",
-  "description": "Trainingstermine buchen bei der PK-Fußballschule Hattersheim",
+  "description": "Trainingstermine buchen bei der PK-Fussballschule Hattersheim",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

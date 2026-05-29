@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import nodemailer from 'npm:nodemailer';
+import { renderEmailLayout, BRAND_COLORS, FROM_HEADER, EmailRow } from '../_shared/email-template.ts';
 
 const PROGRAM_NAMES: Record<string, string> = {
   individual:           'Individualtraining',
@@ -112,25 +113,30 @@ Deno.serve(async (req) => {
       const safeDate = formatDate(String(appt.date ?? '').replace(/[^0-9-]/g, ''));
       const safeLocation = String(new_location).replace(/[<>]/g, '').slice(0, 40);
 
+      const rows: EmailRow[] = [
+        { label: 'Leistung', value: programName },
+        { label: 'Datum', value: safeDate },
+        { label: 'Uhrzeit', value: `${safeTime} Uhr` },
+        { label: 'Neuer Standort', value: safeLocation },
+      ];
+
+      const html = renderEmailLayout({
+        title: 'Standort-Änderung',
+        accentColor: BRAND_COLORS.accentOrange,
+        preheader: `Dein ${programName} am ${safeDate} findet jetzt in ${safeLocation} statt.`,
+        greeting: `Hallo ${name},`,
+        intro: 'der Standort eines deiner gebuchten Trainings hat sich geändert.',
+        rows,
+        outro: 'Bei Fragen melde dich gerne bei deinem Trainer.',
+        signOff: 'Bis bald!',
+      });
+
       try {
         await transporter.sendMail({
-          from: `"PK Fußballschule" <${Deno.env.get('GMAIL_USER')}>`,
+          from: FROM_HEADER,
           to: email,
           subject: `Standort-Änderung – ${programName}`,
-          html: `
-            <div style="font-family:sans-serif;max-width:480px;margin:auto">
-              <h2 style="color:#3a7a52">Hallo ${name},</h2>
-              <p>der Standort eines deiner gebuchten Trainings hat sich geändert.</p>
-              <table style="background:#f5f5f5;border-radius:10px;padding:16px 24px;width:100%">
-                <tr><td style="color:#666;padding:6px 0">Leistung</td><td><strong>${programName}</strong></td></tr>
-                <tr><td style="color:#666;padding:6px 0">Datum</td><td><strong>${safeDate}</strong></td></tr>
-                <tr><td style="color:#666;padding:6px 0">Uhrzeit</td><td><strong>${safeTime} Uhr</strong></td></tr>
-                <tr><td style="color:#666;padding:6px 0">Neuer Standort</td><td><strong>${safeLocation}</strong></td></tr>
-              </table>
-              <p>Bei Fragen melde dich gerne bei deinem Trainer.</p>
-              <p style="color:#888;font-size:14px;margin-top:24px">Bis bald!<br>Dein PK Fußballschule Team</p>
-            </div>
-          `,
+          html,
         });
         notified++;
       } catch (e) {

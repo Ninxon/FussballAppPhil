@@ -10,7 +10,7 @@ name: "Home – Inhalte nach Login korrekt sichtbar"
 - waitForAnimationToEnd
 
 # Header mit Studio-Name und Begrüßung vorhanden
-- assertVisible: "PK Fußballschule"
+- assertVisible: "PK Fussballschule"
 
 # Entweder nächster Termin oder Leer-Zustand sichtbar
 - assertVisible:

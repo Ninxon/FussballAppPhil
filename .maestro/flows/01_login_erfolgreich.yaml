@@ -4,7 +4,7 @@ name: "Login – Erfolgreicher Login"
 - launchApp:
     clearState: true
 
-- assertVisible: "PK-Fußballschule"
+- assertVisible: "PK-Fussballschule"
 - assertVisible: "Willkommen zurück"
 - assertVisible: "Rhein-Main"
 

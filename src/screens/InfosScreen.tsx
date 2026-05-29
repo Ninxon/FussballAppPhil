@@ -102,7 +102,7 @@ export function InfosScreen({ profile }: Props) {
       showsVerticalScrollIndicator={false}
     >
       <View style={[styles.header, { paddingTop: insets.top + 28 }]}>
-        <Text style={styles.headerSub}>PK Fußballschule</Text>
+        <Text style={styles.headerSub}>PK Fussballschule</Text>
         <Text style={styles.headerTitle}>Infos &{'\n'}Neuigkeiten</Text>
       </View>
 

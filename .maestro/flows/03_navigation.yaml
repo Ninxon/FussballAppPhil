@@ -18,7 +18,7 @@ name: "Navigation – Alle Tabs erreichbar"
 # Infos-Tab
 - tapOn: "Infos"
 - waitForAnimationToEnd
-- assertVisible: "PK Fußballschule"
+- assertVisible: "PK Fussballschule"
 
 # Profil-Tab
 - tapOn: "Profil"

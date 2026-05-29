@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js';
 import nodemailer from 'npm:nodemailer';
+import { renderEmailLayout, BRAND_COLORS, FROM_HEADER, EmailRow } from '../_shared/email-template.ts';
 
 const PROGRAM_NAMES: Record<string, string> = {
   individual:           'Individualtraining',
@@ -83,27 +84,30 @@ Deno.serve(async (req) => {
         ? `${dateParts[2]}.${dateParts[1]}.${dateParts[0]}`
         : appt.date;
       const safeLocation = (appt.location ?? '').replace(/[<>]/g, '').slice(0, 40);
-      const locationRow = safeLocation
-        ? `<tr><td style="color:#666;padding:6px 0">Standort</td><td><strong>${safeLocation}</strong></td></tr>`
-        : '';
+      const safeTime = (appt.time as string).slice(0, 5);
+
+      const rows: EmailRow[] = [
+        { label: 'Leistung', value: programName },
+        { label: 'Datum', value: fmtDate },
+        { label: 'Uhrzeit', value: `${safeTime} Uhr` },
+      ];
+      if (safeLocation) rows.push({ label: 'Standort', value: safeLocation });
+
+      const html = renderEmailLayout({
+        title: 'Erinnerung an dein Training',
+        accentColor: BRAND_COLORS.accentBlue,
+        preheader: `Morgen um ${safeTime} Uhr: ${programName}.`,
+        greeting: `Hallo ${profile?.full_name ?? ''},`,
+        intro: 'wir möchten dich an dein Training morgen erinnern.',
+        rows,
+        signOff: 'Bis morgen!',
+      });
 
       await transporter.sendMail({
-        from: `"PK Fußballschule" <${Deno.env.get('GMAIL_USER')}>`,
+        from: FROM_HEADER,
         to: user.email,
-        subject: `⏰ Erinnerung – ${programName} morgen`,
-        html: `
-          <div style="font-family:sans-serif;max-width:480px;margin:auto">
-            <h2 style="color:#3a7a52">Hallo ${profile?.full_name ?? ''},</h2>
-            <p>wir möchten dich an dein Training <strong>morgen</strong> erinnern.</p>
-            <table style="background:#f5f5f5;border-radius:10px;padding:16px 24px;width:100%">
-              <tr><td style="color:#666;padding:6px 0">Leistung</td><td><strong>${programName}</strong></td></tr>
-              <tr><td style="color:#666;padding:6px 0">Datum</td><td><strong>${fmtDate}</strong></td></tr>
-              <tr><td style="color:#666;padding:6px 0">Uhrzeit</td><td><strong>${(appt.time as string).slice(0, 5)} Uhr</strong></td></tr>
-              ${locationRow}
-            </table>
-            <p style="color:#888;font-size:14px;margin-top:24px">Bis morgen!<br>Dein PK Fußballschule Team</p>
-          </div>
-        `,
+        subject: `Erinnerung – ${programName} morgen`,
+        html,
       });
 
       // Erst nach erfolgreichem Versand markieren -> bei Fehler wird beim
