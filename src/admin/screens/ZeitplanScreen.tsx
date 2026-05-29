@@ -37,13 +37,32 @@ const SPECIALTY_COLOR: Record<TrainerSpecialty, string> = {
 interface Props {
   trainers: TrainerProfile[];
   trainerSchedules: TrainerSchedule[];
+  trainerMonthlyCounts: Record<string, Record<string, number>>;
   onSetSlot: (trainerId: string, day: number, time: string, location: Location | null) => Promise<{ error: unknown }>;
   onCreateTrainer: (params: { full_name: string; email: string; specialty: TrainerSpecialty }) => Promise<{ error: string | null; tempPassword?: string }>;
   onUpdateTrainer: (trainerId: string, params: { full_name: string; trainer_specialty: TrainerSpecialty }) => Promise<{ error: string | null }>;
   onDeleteTrainer: (trainerId: string) => Promise<{ error: string | null; cancelledCount?: number }>;
 }
 
-export function ZeitplanScreen({ trainers, trainerSchedules, onSetSlot, onCreateTrainer, onUpdateTrainer, onDeleteTrainer }: Props) {
+const MONTH_LABELS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+
+function currentYearMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatYearMonth(ym: string): string {
+  const [y, m] = ym.split('-');
+  return `${MONTH_LABELS[parseInt(m, 10) - 1]} ${y}`;
+}
+
+function shiftYearMonth(ym: string, delta: number): string {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+export function ZeitplanScreen({ trainers, trainerSchedules, trainerMonthlyCounts, onSetSlot, onCreateTrainer, onUpdateTrainer, onDeleteTrainer }: Props) {
   const [selectedTrainerId, setSelectedTrainerId] = useState<string | null>(
     trainers.length > 0 ? trainers[0].id : null,
   );
@@ -71,6 +90,12 @@ export function ZeitplanScreen({ trainers, trainerSchedules, onSetSlot, onCreate
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
+
+  // Monats-Counter
+  const [counterMonth, setCounterMonth] = useState<string>(currentYearMonth());
+  const nowYM = currentYearMonth();
+  const counterValue = (selectedTrainerId && trainerMonthlyCounts[selectedTrainerId]?.[counterMonth]) ?? 0;
+  const canGoForward = counterMonth < nowYM;
 
   const selectedTrainer = trainers.find(t => t.id === selectedTrainerId) ?? null;
 
@@ -222,6 +247,37 @@ export function ZeitplanScreen({ trainers, trainerSchedules, onSetSlot, onCreate
           >
             <Text style={[styles.actionBtnText, styles.actionBtnDangerText]}>✕ Löschen</Text>
           </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Monats-Counter: vergangene bestätigte Trainings */}
+      {selectedTrainer && !showForm && (
+        <View style={styles.counterCard}>
+          <View style={styles.counterHeader}>
+            <Text style={styles.counterLabel}>Trainings</Text>
+            <View style={styles.counterNav}>
+              <TouchableOpacity
+                style={styles.counterNavBtn}
+                onPress={() => setCounterMonth(prev => shiftYearMonth(prev, -1))}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.counterNavText}>‹</Text>
+              </TouchableOpacity>
+              <Text style={styles.counterMonth}>{formatYearMonth(counterMonth)}</Text>
+              <TouchableOpacity
+                style={[styles.counterNavBtn, !canGoForward && styles.counterNavBtnDisabled]}
+                onPress={() => canGoForward && setCounterMonth(prev => shiftYearMonth(prev, 1))}
+                activeOpacity={canGoForward ? 0.7 : 1}
+                disabled={!canGoForward}
+              >
+                <Text style={[styles.counterNavText, !canGoForward && styles.counterNavTextDisabled]}>›</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <Text style={styles.counterValue}>
+            {counterValue} <Text style={styles.counterUnit}>{counterValue === 1 ? 'Training' : 'Trainings'}</Text>
+          </Text>
+          <Text style={styles.counterHint}>Nur vergangene, bestätigte Termine.</Text>
         </View>
       )}
 
@@ -444,6 +500,19 @@ const styles = StyleSheet.create({
   actionBtnText: { fontSize: 13, fontWeight: '600', color: '#4A6080' },
   actionBtnTextActive: { color: '#5A8C6A' },
   actionBtnDangerText: { color: '#EF4444' },
+
+  counterCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(21,34,56,0.08)' },
+  counterHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  counterLabel: { fontSize: 13, fontWeight: '700', color: '#4A6080', textTransform: 'uppercase', letterSpacing: 0.6 },
+  counterNav: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  counterNavBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#EEF3FB', alignItems: 'center', justifyContent: 'center' },
+  counterNavBtnDisabled: { backgroundColor: '#F7F9FC' },
+  counterNavText: { fontSize: 16, fontWeight: '700', color: '#152238', lineHeight: 18 },
+  counterNavTextDisabled: { color: '#C7D0DC' },
+  counterMonth: { fontSize: 13, fontWeight: '600', color: '#152238', minWidth: 110, textAlign: 'center' },
+  counterValue: { fontSize: 30, fontWeight: '800', color: '#5A8C6A', marginTop: 2 },
+  counterUnit: { fontSize: 16, fontWeight: '600', color: '#4A6080' },
+  counterHint: { fontSize: 11, color: '#7A90AE', marginTop: 4 },
 
   form: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(21,34,56,0.08)' },
   formTitle: { fontSize: 15, fontWeight: '700', color: '#152238', marginBottom: 12 },

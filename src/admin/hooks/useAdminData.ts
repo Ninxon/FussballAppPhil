@@ -54,6 +54,7 @@ export function useAdminData() {
   const [allAppointments, setAllAppointments] = useState<AdminAppointment[]>([]);
   const [trainers, setTrainers] = useState<TrainerProfile[]>([]);
   const [trainerSchedules, setTrainerSchedules] = useState<TrainerSchedule[]>([]);
+  const [trainerMonthlyCounts, setTrainerMonthlyCounts] = useState<Record<string, Record<string, number>>>({});
   const [activeTokensByCustomer, setActiveTokensByCustomer] = useState<Record<string, { individual: number; gruppe: number }>>({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -69,12 +70,14 @@ export function useAdminData() {
       { data: trainerProfiles },
       { data: allTokens },
       { data: schedules },
+      { data: monthlyCounts },
     ] = await Promise.all([
       ProfileService.fetchAllCustomers(),
       AppointmentService.fetchAllDesc(),
       ProfileService.fetchTrainers(),
       TokenService.fetchAllActive(),
       TrainerScheduleService.fetchAll(),
+      supabase.rpc('get_trainer_monthly_counts'),
     ]);
     if (profilesErr || apptsErr) {
       setLoadError(profilesErr?.message ?? apptsErr?.message ?? 'Fehler beim Laden.');
@@ -91,6 +94,13 @@ export function useAdminData() {
       else if (token.category === 'gruppe') tokenMap[token.user_id].gruppe++;
     }
     setActiveTokensByCustomer(tokenMap);
+
+    const countsMap: Record<string, Record<string, number>> = {};
+    for (const row of (monthlyCounts ?? []) as { trainer_id: string; year_month: string; sessions: number }[]) {
+      if (!countsMap[row.trainer_id]) countsMap[row.trainer_id] = {};
+      countsMap[row.trainer_id][row.year_month] = row.sessions;
+    }
+    setTrainerMonthlyCounts(countsMap);
 
     setLoading(false);
   };
@@ -393,7 +403,7 @@ export function useAdminData() {
   };
 
   return {
-    customers, allAppointments, trainers, trainerSchedules, activeTokensByCustomer, loading, loadError,
+    customers, allAppointments, trainers, trainerSchedules, trainerMonthlyCounts, activeTokensByCustomer, loading, loadError,
     cancelAppointment, addAppointmentForCustomer,
     createCustomer, deleteCustomer,
     saveCustomerLevel, saveBookingPermissions, saveCustomerProfile,

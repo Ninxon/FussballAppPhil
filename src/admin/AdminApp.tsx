@@ -40,7 +40,7 @@ export function AdminApp({ onLogout }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const {
-    customers, allAppointments, trainers, trainerSchedules, activeTokensByCustomer, loading, loadError,
+    customers, allAppointments, trainers, trainerSchedules, trainerMonthlyCounts, activeTokensByCustomer, loading, loadError,
     cancelAppointment, addAppointmentForCustomer,
     createCustomer, deleteCustomer,
     saveCustomerLevel, saveBookingPermissions, saveCustomerProfile,
@@ -152,6 +152,7 @@ export function AdminApp({ onLogout }: Props) {
         <ZeitplanScreen
           trainers={trainers}
           trainerSchedules={trainerSchedules}
+          trainerMonthlyCounts={trainerMonthlyCounts}
           onSetSlot={setScheduleSlot}
           onCreateTrainer={createTrainer}
           onUpdateTrainer={updateTrainer}
