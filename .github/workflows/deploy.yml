@@ -26,12 +26,14 @@ jobs:
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_SITE_URL: ${{ secrets.EXPO_PUBLIC_SITE_URL }}
 
       - name: Build (Expo export)
         run: npx expo export --platform web
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_SITE_URL: ${{ secrets.EXPO_PUBLIC_SITE_URL }}
 
       # Expo regenerates dist/ from scratch: it produces a fresh hashed bundle
       # but a bare index.html and drops the hand-maintained PWA files. We keep

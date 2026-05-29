@@ -328,9 +328,11 @@ export function LoginScreen({ onLogin }: Props) {
     if (!forgotEmail.includes('@')) { setForgotErr('Bitte eine gültige E-Mail-Adresse eingeben.'); return; }
     setForgotErr('');
     setForgotLoading(true);
-    const redirectTo = Platform.OS === 'web' && typeof window !== 'undefined'
-      ? window.location.origin
-      : undefined;
+    const redirectTo =
+      process.env.EXPO_PUBLIC_SITE_URL
+      ?? (Platform.OS === 'web' && typeof window !== 'undefined'
+          ? window.location.origin
+          : undefined);
     const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, { redirectTo });
     setForgotLoading(false);
     if (error) {
@@ -501,7 +503,7 @@ export function LoginScreen({ onLogin }: Props) {
           {/* Decorative footer */}
           <View style={styles.decorRow}>
             <View style={styles.decorLine} />
-            <Text style={styles.decorText}>PK Fußballschule · Buchungs-App</Text>
+            <Text style={styles.decorText}>PK Fussballschule · Buchungs-App</Text>
             <View style={styles.decorLine} />
           </View>
 
