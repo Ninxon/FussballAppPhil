@@ -537,6 +537,24 @@ COMMENT ON FUNCTION "public"."get_slot_players"() IS '@omit';
 
 
 
+CREATE OR REPLACE FUNCTION "public"."get_trainer_monthly_counts"() RETURNS TABLE("trainer_id" "uuid", "year_month" "text", "sessions" integer)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'forbidden';
+  END IF;
+  RETURN QUERY
+    SELECT v.trainer_id, v.year_month, v.sessions
+    FROM public.v_trainer_monthly_counts v;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_trainer_monthly_counts"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."guard_profile_self_update"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -833,6 +851,18 @@ CREATE TABLE IF NOT EXISTS "public"."trainer_videos" (
 
 
 ALTER TABLE "public"."trainer_videos" OWNER TO "postgres";
+
+
+CREATE OR REPLACE VIEW "public"."v_trainer_monthly_counts" WITH ("security_invoker"='on') AS
+ SELECT "trainer_id",
+    "to_char"(("date")::timestamp with time zone, 'YYYY-MM'::"text") AS "year_month",
+    ("count"(*))::integer AS "sessions"
+   FROM "public"."appointments"
+  WHERE (("status" = 'confirmed'::"text") AND ("date" < CURRENT_DATE) AND ("trainer_id" IS NOT NULL))
+  GROUP BY "trainer_id", ("to_char"(("date")::timestamp with time zone, 'YYYY-MM'::"text"));
+
+
+ALTER VIEW "public"."v_trainer_monthly_counts" OWNER TO "postgres";
 
 
 ALTER TABLE ONLY "public"."appointments"
@@ -1372,6 +1402,13 @@ GRANT ALL ON FUNCTION "public"."get_slot_players"() TO "service_role";
 
 
 
+REVOKE ALL ON FUNCTION "public"."get_trainer_monthly_counts"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_trainer_monthly_counts"() TO "anon";
+GRANT ALL ON FUNCTION "public"."get_trainer_monthly_counts"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_trainer_monthly_counts"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."guard_profile_self_update"() TO "anon";
 GRANT ALL ON FUNCTION "public"."guard_profile_self_update"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."guard_profile_self_update"() TO "service_role";
@@ -1467,6 +1504,10 @@ GRANT ALL ON TABLE "public"."trainer_schedules" TO "service_role";
 GRANT ALL ON TABLE "public"."trainer_videos" TO "anon";
 GRANT ALL ON TABLE "public"."trainer_videos" TO "authenticated";
 GRANT ALL ON TABLE "public"."trainer_videos" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."v_trainer_monthly_counts" TO "service_role";
 
 
 
