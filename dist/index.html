@@ -28,36 +28,37 @@
 
     <title>PK-Fußballschule</title>
 
-    <link rel="icon" type="image/png" href="/favicon.png" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="theme-color" content="#1C2133" />
 
-    <meta name="theme-color" content="#5A8C6A" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="PK-Fußball" />
-
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
-      html, body { height: 100%; }
-      body { overflow: hidden; }
-      #root { display: flex; height: 100%; flex: 1; }
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+      }
+      /* These styles disable body scrolling if you are using <ScrollView> */
+      body {
+        overflow: hidden;
+      }
+      /* These styles make the root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
     </style>
   </head>
+
   <body>
-    <noscript>Diese App benötigt JavaScript.</noscript>
+    <noscript>
+      You need to enable JavaScript to run this app.
+    </noscript>
     <div id="root"></div>
-
-    <script src="/_expo/static/js/web/AppEntry-6be347e3e64e3aae3018c4a25d784079.js" defer></script>
-
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
-      }
-      window.addEventListener('beforeinstallprompt', e => {
-        e.preventDefault();
-        window._pwaInstallPrompt = e;
-      });
-    </script>
-  </body>
+  <script src="/_expo/static/js/web/AppEntry-c3c69d17d6d1c3b1c40e2636f3b123ab.js" defer></script>
+</body>
 </html>
