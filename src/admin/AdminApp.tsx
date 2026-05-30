@@ -41,7 +41,7 @@ export function AdminApp({ onLogout }: Props) {
 
   const {
     customers, allAppointments, trainers, trainerSchedules, trainerMonthlyCounts, activeTokensByCustomer, loading, loadError,
-    cancelAppointment, addAppointmentForCustomer,
+    cancelAppointment, addAppointmentForCustomer, addRecurringAppointments,
     createCustomer, deleteCustomer,
     saveCustomerLevel, saveBookingPermissions, saveCustomerProfile,
     setScheduleSlot, createTrainer, updateTrainer, deleteTrainer,
@@ -126,6 +126,7 @@ export function AdminApp({ onLogout }: Props) {
           onBack={() => setSelectedCustomerId(null)}
           onCancelAppointment={cancelAppointment}
           onAddAppointment={addAppointmentForCustomer}
+          onAddRecurring={addRecurringAppointments}
           onSaveLevel={saveCustomerLevel}
           onSaveBookingPermissions={saveBookingPermissions}
           onSaveProfile={saveCustomerProfile}
