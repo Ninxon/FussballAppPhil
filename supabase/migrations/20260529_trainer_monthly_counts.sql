@@ -13,8 +13,12 @@ WHERE status = 'confirmed'
   AND trainer_id IS NOT NULL
 GROUP BY trainer_id, to_char(date, 'YYYY-MM');
 
--- Views vererben die RLS der Basistabelle, aber wir geben Admins eine explizite
--- RPC, damit das Hook sauber per supabase.rpc(...) lesen kann.
+-- Admin-Zugriff läuft über diese explizite SECURITY-DEFINER-RPC (is_admin()-Gate),
+-- damit das Hook sauber per supabase.rpc(...) lesen kann.
+-- ACHTUNG: Eine View vererbt die RLS der Basistabelle NICHT automatisch — sie läuft
+-- per Default mit den Rechten des Owners (security_invoker = false) und umgeht damit
+-- RLS. Der Direktzugriff auf v_trainer_monthly_counts wird daher in
+-- 20260530_fix_trainer_counts_view_rls.sql per security_invoker = on + REVOKE gehärtet.
 CREATE OR REPLACE FUNCTION public.get_trainer_monthly_counts()
 RETURNS TABLE (trainer_id uuid, year_month text, sessions int)
 LANGUAGE plpgsql
