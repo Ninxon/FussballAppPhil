@@ -26,7 +26,7 @@ interface Props {
   myAppointments: Appointment[];
   profile: Profile | null;
   activeTokens: CancellationToken[];
-  addAppointment: (date: string, time: string, program: string) => Promise<{ error: any }>;
+  addAppointment: (date: string, time: string, program: string, location?: Location | null) => Promise<{ error: any }>;
   setTab: (t: Tab) => void;
   trainerSchedules?: TrainerSchedule[];
   trainers?: Array<{ id: string; trainer_specialty?: string | null }>;
