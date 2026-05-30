@@ -4,7 +4,7 @@ import { AppointmentService } from '../../services/appointmentService';
 import { ProfileService } from '../../services/profileService';
 import { TokenService } from '../../services/tokenService';
 import { TrainerScheduleService } from '../../services/trainerScheduleService';
-import { CustomerService, CreateCustomerParams } from '../services/customerService';
+import { CustomerService, CreateCustomerParams, extractFunctionError } from '../services/customerService';
 import { PROGRAM_CATEGORY, ProgramId } from '../../constants/programs';
 import { canJoinGroupSlot, checkProgramPermission } from '../../utils/bookingRules';
 import { supabase } from '../../lib/supabase';
@@ -130,10 +130,12 @@ export function useAdminData() {
     return { error: null };
   };
 
-  const addAppointmentForCustomer = async (
+  // Reine Validierung eines einzelnen Termins — alle Buchungsregeln, kein INSERT.
+  // Wird sowohl von der Einzel- als auch der Serien-Buchung genutzt.
+  const validateBooking = async (
     userId: string, date: string, time: string, program: string,
     trainerId?: string | null,
-  ) => {
+  ): Promise<{ error: { message: string } | null }> => {
     // No bookings in the past — neither past days nor past times today. The
     // time guard also catches the default slot staying selected after its chip
     // was disabled (e.g. 13:00 still set when it is already afternoon).
@@ -211,6 +213,19 @@ export function useAdminData() {
       }
     }
 
+    return { error: null };
+  };
+
+  // Reiner INSERT (ohne Validierung) — Standort + Spielerdaten leitet er aus
+  // Trainer-Slot und Kundenprofil ab. Gibt die eingefügte Zeile zurück.
+  const insertBooking = async (
+    userId: string, date: string, time: string, program: string,
+    trainerId?: string | null,
+  ) => {
+    const customer = customers.find(c => c.id === userId);
+    const birthYear = customer?.birth_date ? parseInt(customer.birth_date.slice(0, 4)) : null;
+    const level = customer?.level ?? null;
+
     // Standort folgt dem gewählten Trainer-Slot (location des Zeitplan-Eintrags).
     const jsDayLoc = new Date(date + 'T12:00:00').getDay();
     const dowLoc = jsDayLoc === 0 ? 7 : jsDayLoc;
@@ -218,18 +233,71 @@ export function useAdminData() {
       ? (trainerSchedules.find(s => s.trainer_id === trainerId && s.day_of_week === dowLoc && s.time === time)?.location ?? null)
       : null;
 
-    const { data, error } = await AppointmentService.insert({
+    return AppointmentService.insert({
       user_id: userId, date, time, status: 'confirmed', program,
       ...(trainerId ? { trainer_id: trainerId } : {}),
       ...(birthYear ? { session_birth_year: birthYear } : {}),
       ...(level ? { session_level: level } : {}),
       ...(slotLocation ? { location: slotLocation } : {}),
     });
+  };
 
+  const addAppointmentForCustomer = async (
+    userId: string, date: string, time: string, program: string,
+    trainerId?: string | null,
+  ) => {
+    const { error: vErr } = await validateBooking(userId, date, time, program, trainerId);
+    if (vErr) return { error: vErr };
+
+    const { data, error } = await insertBooking(userId, date, time, program, trainerId);
     if (data && !error) {
       setAllAppointments(prev => [...prev, fmtTime(data as AdminAppointment)]);
     }
     return { error };
+  };
+
+  // Serien-Buchung („alles oder nichts"): erst werden ALLE Termine validiert.
+  // Scheitert auch nur einer, wird nichts gebucht und die Konfliktliste
+  // zurückgegeben. Sind alle sauber, werden sie eingefügt; bricht ein INSERT
+  // wider Erwarten ab (z. B. DB-Kapazitäts-Trigger), werden die bereits
+  // eingefügten Termine wieder gelöscht (Rollback) — kein Teil-Ergebnis.
+  const addRecurringAppointments = async (
+    userId: string, dates: string[], time: string, program: string,
+    trainerId?: string | null,
+  ): Promise<{ error: { message: string } | null; conflicts: { date: string; reason: string }[]; created: number }> => {
+    if (dates.length === 0) {
+      return { error: { message: 'Keine Termine im gewählten Zeitraum.' }, conflicts: [], created: 0 };
+    }
+
+    // 1. Vorab alle prüfen.
+    const conflicts: { date: string; reason: string }[] = [];
+    for (const date of dates) {
+      const { error } = await validateBooking(userId, date, time, program, trainerId);
+      if (error) conflicts.push({ date, reason: error.message });
+    }
+    if (conflicts.length > 0) {
+      return { error: null, conflicts, created: 0 };
+    }
+
+    // 2. Alle einfügen, bei Fehler Rollback der bereits angelegten Termine.
+    const inserted: AdminAppointment[] = [];
+    for (const date of dates) {
+      const { data, error } = await insertBooking(userId, date, time, program, trainerId);
+      if (error || !data) {
+        for (const a of inserted) {
+          await AppointmentService.delete(a.id);
+        }
+        return {
+          error: { message: `Buchung am ${date} fehlgeschlagen (${error?.message ?? 'unbekannt'}). Serie abgebrochen, keine Termine gespeichert.` },
+          conflicts: [],
+          created: 0,
+        };
+      }
+      inserted.push(fmtTime(data as AdminAppointment));
+    }
+
+    setAllAppointments(prev => [...prev, ...inserted]);
+    return { error: null, conflicts: [], created: inserted.length };
   };
 
   const createCustomer = async (
@@ -238,11 +306,7 @@ export function useAdminData() {
     try {
       const { data, error } = await CustomerService.create(params);
       if (error) {
-        const body = (error as any).context;
-        const msg = body && typeof body === 'object' && 'error' in body
-          ? String(body.error)
-          : error.message ?? JSON.stringify(error);
-        return { error: msg };
+        return { error: await extractFunctionError(error) };
       }
       if (data?.error) return { error: data.error as string };
       await load();
@@ -256,11 +320,7 @@ export function useAdminData() {
     try {
       const { data, error } = await CustomerService.delete(customerId);
       if (error) {
-        const body = (error as any).context;
-        const msg = body && typeof body === 'object' && 'error' in body
-          ? String(body.error)
-          : error.message ?? JSON.stringify(error);
-        return { error: msg };
+        return { error: await extractFunctionError(error) };
       }
       if (data?.error) return { error: data.error as string };
       setCustomers(prev => prev.filter(c => c.id !== customerId));
@@ -358,11 +418,7 @@ export function useAdminData() {
         trainer_specialty: params.specialty,
       });
       if (error) {
-        const body = (error as any).context;
-        const msg = body && typeof body === 'object' && 'error' in body
-          ? String(body.error)
-          : (error as any).message ?? JSON.stringify(error);
-        return { error: msg };
+        return { error: await extractFunctionError(error) };
       }
       if (data?.error) return { error: data.error as string };
       await load();
@@ -404,7 +460,7 @@ export function useAdminData() {
 
   return {
     customers, allAppointments, trainers, trainerSchedules, trainerMonthlyCounts, activeTokensByCustomer, loading, loadError,
-    cancelAppointment, addAppointmentForCustomer,
+    cancelAppointment, addAppointmentForCustomer, addRecurringAppointments,
     createCustomer, deleteCustomer,
     saveCustomerLevel, saveBookingPermissions, saveCustomerProfile,
     setScheduleSlot, createTrainer, updateTrainer, deleteTrainer,

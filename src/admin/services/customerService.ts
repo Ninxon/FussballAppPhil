@@ -21,3 +21,23 @@ export const CustomerService = {
   delete: (customerId: string) =>
     supabase.functions.invoke('delete-customer', { body: { customerId } }),
 };
+
+// Bei einem non-2xx-Status liefert functions.invoke einen FunctionsHttpError,
+// dessen `context` das rohe Response-Objekt ist (NICHT der geparste Body). Die
+// vom Server gesendete `{ error: '...' }`-Meldung steht daher erst nach
+// `await context.json()` zur Verfügung. Dieser Helfer zieht sie heraus und
+// fällt sonst auf die generische Fehlermeldung zurück.
+export async function extractFunctionError(error: unknown): Promise<string> {
+  const context = (error as { context?: unknown })?.context;
+  if (context && typeof (context as Response).json === 'function') {
+    try {
+      const body = await (context as Response).json();
+      if (body && typeof body === 'object' && 'error' in body) {
+        return String((body as { error: unknown }).error);
+      }
+    } catch {
+      // Body ist kein JSON -> generische Meldung unten
+    }
+  }
+  return (error as { message?: string })?.message ?? JSON.stringify(error);
+}

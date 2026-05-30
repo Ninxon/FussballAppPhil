@@ -68,6 +68,21 @@ Deno.serve(async (req) => {
       email_confirm: true,
     });
     if (authError || !authData.user) {
+      // Doppelte E-Mail (z. B. Geschwister mit gleicher Eltern-Adresse) ist ein
+      // Eingabefehler, kein Serverfehler -> klare Meldung + 409 statt 500.
+      const isDuplicate =
+        (authError as { code?: string } | null)?.code === 'email_exists' ||
+        authError?.status === 422 ||
+        /already.*registered|already.*exist/i.test(authError?.message ?? '');
+      if (isDuplicate) {
+        return json(
+          {
+            error:
+              'Diese E-Mail-Adresse ist bereits vergeben. Für Geschwister bitte eine eigene Adresse verwenden, z. B. eltern+name@gmail.com (kommt im selben Postfach an).',
+          },
+          409,
+        );
+      }
       return json({ error: authError?.message ?? 'Fehler beim Anlegen des Nutzers' }, 500);
     }
 
