@@ -52,12 +52,11 @@ jobs:
           find dist/_expo/static/js/web -name 'AppEntry-*.js' ! -name "${NEW_BUNDLE}" -delete
           grep -q "$NEW_BUNDLE" dist/index.html
 
-      - name: Deploy via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      - name: Deploy via SFTP
+        uses: wangyoucao577/SFTP-Deploy-Action@v1
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftps
-          local-dir: ./dist/
-          server-dir: /public/APP/
+          local_dir: ./dist/
+          remote_dir: /public/APP/
