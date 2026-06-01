@@ -57,16 +57,18 @@ jobs:
           sudo apt-get install -y lftp
           lftp -u "${{ secrets.FTP_USERNAME }}","${{ secrets.FTP_PASSWORD }}" sftp://${{ secrets.FTP_SERVER }} <<'LFTP'
           set sftp:auto-confirm yes
-          # Deploy to the webspace root: app.pk-fussballschule.de serves from `/`,
-          # and index.html references its assets with absolute paths (/_expo/...),
-          # so the bundle only resolves when the app lives at the root.
-          mirror -R ./dist/ /
+          # The SFTP login lands at the webspace root `/`, but IONOS serves the
+          # subdomain app.pk-fussballschule.de from the `/public/APP` document
+          # root. index.html references its assets with absolute paths (/_expo/...),
+          # which resolve against that document root — so the bundle must be
+          # deployed INTO /public/APP, not the FTP root.
+          mirror -R ./dist/ /public/APP
           # index.html keeps a constant byte size on every build (the bundle hash
           # is always 32 hex chars), so `mirror` treats it as unchanged and never
           # re-uploads it — the site stays pinned to the old bundle. Force the
           # hand-maintained, size-stable files explicitly so the new bundle hash
           # actually goes live.
-          put -O / ./dist/index.html
-          put -O / ./dist/sw.js
+          put -O /public/APP ./dist/index.html
+          put -O /public/APP ./dist/sw.js
           bye
           LFTP
