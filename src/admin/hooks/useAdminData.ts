@@ -199,8 +199,13 @@ export function useAdminData() {
     const level = customer?.level ?? null;
 
     if (PROGRAM_CATEGORY[program as ProgramId] === 'gruppe' && birthYear && level) {
+      // Ein Trainer = eine Gruppe (Kapazität 4, ein Programm pro Trainer/Slot).
+      // Daher nur gegen die Spieler DESSELBEN Trainers auf Kompatibilität prüfen —
+      // sonst blockiert die erste Gruppe fälschlich jede weitere Gruppe (anderer
+      // Trainer) im selben Slot. Ohne gewählten Trainer fällt es auf slot-weit zurück.
       const slotAppts = allAppointments.filter(
-        a => a.date === date && a.time === time && a.program === program && a.status === 'confirmed',
+        a => a.date === date && a.time === time && a.program === program && a.status === 'confirmed'
+          && (trainerId ? a.trainer_id === trainerId : true),
       );
       const existingPlayers = slotAppts
         .filter(a => a.session_birth_year != null && a.session_level)
@@ -345,10 +350,42 @@ export function useAdminData() {
 
   const saveCustomerProfile = async (
     customerId: string,
-    fields: Partial<Pick<CustomerProfile, 'player_type' | 'parent_name' | 'location' | 'birth_date' | 'phone' | 'address'>>,
+    fields: Partial<Pick<CustomerProfile, 'full_name' | 'player_type' | 'parent_name' | 'location' | 'birth_date' | 'phone' | 'address'>>,
   ) => {
     const { error } = await ProfileService.update(customerId, fields as Record<string, unknown>);
     if (!error) setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, ...fields } : c));
+    return { error };
+  };
+
+  // E-Mail-Änderung muss den Auth-User mitziehen (sonst Login-Desync) — daher
+  // über die Edge Function, die mit Service-Role auth.users + profiles aktualisiert.
+  const saveCustomerEmail = async (customerId: string, email: string): Promise<{ error: { message: string } | null }> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('update-customer-email', {
+        body: { customerId, email },
+      });
+      if (error) return { error: { message: await extractFunctionError(error) } };
+      if (data?.error) return { error: { message: data.error as string } };
+      setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, email } : c));
+      return { error: null };
+    } catch (e: any) {
+      return { error: { message: e?.message ?? String(e) } };
+    }
+  };
+
+  // Aktiv/Inaktiv ist reines Label + Filterkriterium — blockiert kein Login/keine Buchung.
+  const toggleCustomerActive = async (customerId: string, isActive: boolean) => {
+    const { error } = await ProfileService.update(customerId, { is_active: isActive });
+    if (!error) setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, is_active: isActive } : c));
+    return { error };
+  };
+
+  // Setzt die aktiven (unbenutzten) Stornierungstokens eines Kunden zurück (Zähler auf 0).
+  const resetCustomerTokens = async (customerId: string) => {
+    const { error } = await TokenService.deleteActiveForUser(customerId);
+    if (!error) {
+      setActiveTokensByCustomer(prev => ({ ...prev, [customerId]: { individual: 0, gruppe: 0 } }));
+    }
     return { error };
   };
 
@@ -463,6 +500,7 @@ export function useAdminData() {
     cancelAppointment, addAppointmentForCustomer, addRecurringAppointments,
     createCustomer, deleteCustomer,
     saveCustomerLevel, saveBookingPermissions, saveCustomerProfile,
+    saveCustomerEmail, toggleCustomerActive, resetCustomerTokens,
     setScheduleSlot, createTrainer, updateTrainer, deleteTrainer,
     markAttended,
     reload: load,

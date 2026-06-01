@@ -41,7 +41,10 @@ interface Props {
   onAddRecurring: (userId: string, dates: string[], time: string, program: string, trainerId?: string | null) => Promise<{ error: { message: string } | null; conflicts: { date: string; reason: string }[]; created: number }>;
   onSaveLevel: (customerId: string, level: PlayerLevel | null) => Promise<{ error: any }>;
   onSaveBookingPermissions: (customerId: string, permissions: Partial<BookingPermissions>) => Promise<{ error: any }>;
-  onSaveProfile: (customerId: string, fields: Partial<Pick<CustomerProfile, 'player_type' | 'parent_name' | 'location' | 'birth_date' | 'phone' | 'address'>>) => Promise<{ error: any }>;
+  onSaveProfile: (customerId: string, fields: Partial<Pick<CustomerProfile, 'full_name' | 'player_type' | 'parent_name' | 'location' | 'birth_date' | 'phone' | 'address'>>) => Promise<{ error: any }>;
+  onSaveEmail: (customerId: string, email: string) => Promise<{ error: { message: string } | null }>;
+  onToggleActive: (customerId: string, isActive: boolean) => Promise<{ error: any }>;
+  onResetTokens: (customerId: string) => Promise<{ error: any }>;
   onMarkAttended: (apptId: string, attended: boolean | null) => Promise<{ error: any }>;
   onDeleteCustomer: (id: string) => Promise<{ error: string | null }>;
 }
@@ -92,7 +95,8 @@ function ApptRow({ appt, onCancel }: { appt: AdminAppointment; onCancel?: (id: s
 export function KundenDetailScreen({
   customer, appointments, trainers, tokenCounts,
   onBack, onCancelAppointment, onAddAppointment, onAddRecurring,
-  onSaveLevel, onSaveBookingPermissions, onSaveProfile, onMarkAttended, onDeleteCustomer,
+  onSaveLevel, onSaveBookingPermissions, onSaveProfile, onSaveEmail,
+  onToggleActive, onResetTokens, onMarkAttended, onDeleteCustomer,
 }: Props) {
   const ts = todayStr();
 
@@ -125,12 +129,22 @@ export function KundenDetailScreen({
 
   // Profil-Bearbeitung
   const [editProfile, setEditProfile] = useState(false);
+  const [editFullName, setEditFullName] = useState(customer.full_name ?? '');
+  const [editEmail, setEditEmail] = useState(customer.email ?? '');
+  const [editPhone, setEditPhone] = useState(customer.phone ?? '');
+  const [editAddress, setEditAddress] = useState(customer.address ?? '');
   const [editPlayerType, setEditPlayerType] = useState<PlayerType | null>(customer.player_type);
   const [editParentName, setEditParentName] = useState(customer.parent_name ?? '');
   const [editLocation, setEditLocation] = useState<Location | null>((customer.location as Location) ?? null);
   const [editBirthDate, setEditBirthDate] = useState(customer.birth_date ?? '');
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+
+  // Aktiv-Status + Token-Reset
+  const [activeLoading, setActiveLoading] = useState(false);
+  const [showTokenReset, setShowTokenReset] = useState(false);
+  const [tokenResetLoading, setTokenResetLoading] = useState(false);
+  const [tokenResetError, setTokenResetError] = useState<string | null>(null);
 
   // Löschen
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -209,6 +223,12 @@ export function KundenDetailScreen({
   };
 
   const doSaveProfile = async () => {
+    if (!editFullName.trim()) { setProfileError('Name ist ein Pflichtfeld.'); return; }
+    const emailTrimmed = editEmail.trim();
+    if (!emailTrimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      setProfileError('Bitte eine gültige E-Mail-Adresse eingeben.');
+      return;
+    }
     if (!editLocation) { setProfileError('Bitte einen Standort auswählen.'); return; }
     if (editBirthDate.trim()) {
       const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -221,14 +241,45 @@ export function KundenDetailScreen({
     setProfileLoading(true);
     setProfileError(null);
     const { error } = await onSaveProfile(customer.id, {
+      full_name: editFullName.trim(),
       player_type: editPlayerType,
       parent_name: editParentName.trim() || null,
       location: editLocation,
       birth_date: editBirthDate.trim() || null,
+      phone: editPhone.trim(),
+      address: editAddress.trim() || null,
     });
+    if (error) {
+      setProfileLoading(false);
+      setProfileError((error as any).message ?? 'Fehler beim Speichern.');
+      return;
+    }
+    // E-Mail nur bei Änderung — zieht den Auth-User über die Edge Function mit.
+    if (emailTrimmed.toLowerCase() !== (customer.email ?? '').toLowerCase()) {
+      const { error: mailErr } = await onSaveEmail(customer.id, emailTrimmed);
+      if (mailErr) {
+        setProfileLoading(false);
+        setProfileError(`Profil gespeichert, aber E-Mail-Änderung fehlgeschlagen: ${mailErr.message}`);
+        return;
+      }
+    }
     setProfileLoading(false);
-    if (error) setProfileError((error as any).message ?? 'Fehler beim Speichern.');
-    else setEditProfile(false);
+    setEditProfile(false);
+  };
+
+  const doToggleActive = async (value: boolean) => {
+    setActiveLoading(true);
+    await onToggleActive(customer.id, value);
+    setActiveLoading(false);
+  };
+
+  const doResetTokens = async () => {
+    setTokenResetLoading(true);
+    setTokenResetError(null);
+    const { error } = await onResetTokens(customer.id);
+    setTokenResetLoading(false);
+    if (error) setTokenResetError((error as any).message ?? 'Fehler beim Zurücksetzen.');
+    else setShowTokenReset(false);
   };
 
   const doDelete = async () => {
@@ -292,6 +343,10 @@ export function KundenDetailScreen({
       <SectionCard title="Kontaktdaten">
         {editProfile ? (
           <View style={styles.editSection}>
+            <Text style={styles.fieldLabel}>Name *</Text>
+            <TextInput style={styles.editInput} value={editFullName} onChangeText={setEditFullName} placeholder="Max Mustermann" placeholderTextColor="#7A90AE" />
+            <Text style={styles.fieldLabel}>E-Mail *</Text>
+            <TextInput style={styles.editInput} value={editEmail} onChangeText={setEditEmail} placeholder="max@beispiel.de" placeholderTextColor="#7A90AE" keyboardType="email-address" autoCapitalize="none" />
             <Text style={styles.fieldLabel}>Spielertyp</Text>
             <View style={styles.typeRow}>
               {PLAYER_TYPE_OPTIONS.map(opt => (
@@ -318,6 +373,10 @@ export function KundenDetailScreen({
             </View>
             <Text style={styles.fieldLabel}>Elternname</Text>
             <TextInput style={styles.editInput} value={editParentName} onChangeText={setEditParentName} placeholder="Elternname" placeholderTextColor="#7A90AE" />
+            <Text style={styles.fieldLabel}>Telefon</Text>
+            <TextInput style={styles.editInput} value={editPhone} onChangeText={setEditPhone} placeholder="0170 1234567" placeholderTextColor="#7A90AE" keyboardType="phone-pad" />
+            <Text style={styles.fieldLabel}>Adresse</Text>
+            <TextInput style={styles.editInput} value={editAddress} onChangeText={setEditAddress} placeholder="Musterstr. 1, 12345 Stadt" placeholderTextColor="#7A90AE" />
             <Text style={styles.fieldLabel}>Standort *</Text>
             <View style={styles.typeRow}>
               {LOCATIONS.map(loc => (
@@ -345,6 +404,19 @@ export function KundenDetailScreen({
           </View>
         ) : (
           <>
+            <View style={styles.activeRow}>
+              <View style={styles.activeRowLeft}>
+                <View style={[styles.statusDot, { backgroundColor: customer.is_active ? '#22C55E' : '#9CA3AF' }]} />
+                <Text style={styles.activeLabel}>{customer.is_active ? 'Aktiv' : 'Inaktiv'}</Text>
+              </View>
+              <Switch
+                value={customer.is_active}
+                onValueChange={doToggleActive}
+                disabled={activeLoading}
+                trackColor={{ false: '#E5E7EB', true: '#22C55E' }}
+                thumbColor="#fff"
+              />
+            </View>
             <InfoRow label="E-Mail" value={customer.email} />
             <InfoRow label="Telefon" value={customer.phone} />
             {customer.parent_name && <InfoRow label="Elternname" value={customer.parent_name} />}
@@ -352,7 +424,22 @@ export function KundenDetailScreen({
             {birthYear && <InfoRow label="Jahrgang" value={String(birthYear)} />}
             {customer.location && <InfoRow label="Standort" value={customer.location} />}
             <InfoRow label="Spielertyp" value={isTorwart ? 'Torwart' : customer.player_type === 'feldspieler' ? 'Feldspieler' : '—'} />
-            <TouchableOpacity style={styles.editProfileBtn} onPress={() => setEditProfile(true)} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.editProfileBtn}
+              onPress={() => {
+                setEditFullName(customer.full_name ?? '');
+                setEditEmail(customer.email ?? '');
+                setEditPhone(customer.phone ?? '');
+                setEditAddress(customer.address ?? '');
+                setEditPlayerType(customer.player_type);
+                setEditParentName(customer.parent_name ?? '');
+                setEditLocation((customer.location as Location) ?? null);
+                setEditBirthDate(customer.birth_date ?? '');
+                setProfileError(null);
+                setEditProfile(true);
+              }}
+              activeOpacity={0.7}
+            >
               <Text style={styles.editProfileBtnText}>Bearbeiten</Text>
             </TouchableOpacity>
           </>
@@ -417,6 +504,30 @@ export function KundenDetailScreen({
             <Text style={styles.tokenDisplayLabel}>Termine gesamt</Text>
           </View>
         </View>
+
+        {((tokenCounts?.individual ?? 0) + (tokenCounts?.gruppe ?? 0)) > 0 && (
+          showTokenReset ? (
+            <View style={styles.tokenResetBox}>
+              <Text style={styles.tokenResetTitle}>Alle aktiven Stornierungstokens löschen?</Text>
+              <Text style={styles.tokenResetSub}>
+                Die unbenutzten Nachholtermine von {customer.full_name} werden entfernt und können nicht mehr eingelöst werden.
+              </Text>
+              {tokenResetError && <Text style={styles.fieldError}>{tokenResetError}</Text>}
+              <View style={styles.tokenResetBtns}>
+                <TouchableOpacity style={[styles.tokenResetYes, tokenResetLoading && { opacity: 0.6 }]} onPress={doResetTokens} disabled={tokenResetLoading} activeOpacity={0.7}>
+                  <Text style={styles.tokenResetYesText}>{tokenResetLoading ? 'Wird zurückgesetzt...' : 'Ja, zurücksetzen'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.tokenResetNo} onPress={() => { setShowTokenReset(false); setTokenResetError(null); }} activeOpacity={0.7}>
+                  <Text style={styles.tokenResetNoText}>Abbrechen</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.tokenResetBtn} onPress={() => { setShowTokenReset(true); setTokenResetError(null); }} activeOpacity={0.7}>
+              <Text style={styles.tokenResetBtnText}>Tokens zurücksetzen</Text>
+            </TouchableOpacity>
+          )
+        )}
       </View>
 
       {/* Anwesenheit – Individualtraining */}
@@ -708,6 +819,20 @@ const styles = StyleSheet.create({
   tokenDisplayItem: { flex: 1, backgroundColor: '#F4F8FF', borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(21,34,56,0.08)' },
   tokenDisplayCount: { fontSize: 28, fontWeight: '800', color: '#152238' },
   tokenDisplayLabel: { fontSize: 11, fontWeight: '600', color: '#7A90AE', marginTop: 4, textAlign: 'center' },
+  tokenResetBtn: { marginTop: 14, alignSelf: 'flex-start', backgroundColor: 'rgba(239,68,68,0.08)', borderRadius: 8, paddingVertical: 9, paddingHorizontal: 16, borderWidth: 1, borderColor: 'rgba(239,68,68,0.25)' },
+  tokenResetBtnText: { fontSize: 13, fontWeight: '700', color: '#EF4444' },
+  tokenResetBox: { marginTop: 14, backgroundColor: '#FEF2F2', borderWidth: 1.5, borderColor: '#FECACA', borderRadius: 12, padding: 16 },
+  tokenResetTitle: { fontSize: 14, fontWeight: '800', color: '#991B1B', marginBottom: 6 },
+  tokenResetSub: { fontSize: 13, color: '#7F1D1D', lineHeight: 19, marginBottom: 14 },
+  tokenResetBtns: { flexDirection: 'row', gap: 10 },
+  tokenResetYes: { flex: 1, backgroundColor: '#EF4444', borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
+  tokenResetYesText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  tokenResetNo: { flex: 1, backgroundColor: 'rgba(21,34,56,0.06)', borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
+  tokenResetNoText: { fontSize: 14, fontWeight: '600', color: '#4A6080' },
+  activeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#EEF3FB', marginBottom: 4 },
+  activeRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  statusDot: { width: 9, height: 9, borderRadius: 5 },
+  activeLabel: { fontSize: 13, fontWeight: '700', color: '#152238' },
   fieldLabel: { fontSize: 12, fontWeight: '700', color: '#4A6080', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, marginTop: 4 },
   formSection: { backgroundColor: '#F4F8FF', borderRadius: 10, padding: 16, marginBottom: 16 },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(21,34,56,0.08)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#152238', outlineWidth: 0 } as any,

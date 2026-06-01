@@ -407,6 +407,11 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/delete-customer/index.ts"
 
+[functions.update-customer-email]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/update-customer-email/index.ts"
+
 [functions.send-booking-email]
 enabled = true
 verify_jwt = true

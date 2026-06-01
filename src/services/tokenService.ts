@@ -31,4 +31,12 @@ export const TokenService = {
       .select('user_id, category')
       .is('used_at', null)
       .gt('expires_at', new Date().toISOString()),
+
+  // Löscht alle unbenutzten Tokens eines Kunden (Admin-Reset). RLS: nur Admin.
+  deleteActiveForUser: (userId: string) =>
+    supabase
+      .from('cancellation_tokens')
+      .delete()
+      .eq('user_id', userId)
+      .is('used_at', null),
 };

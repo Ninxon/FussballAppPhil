@@ -29,6 +29,8 @@ const PLAYER_TYPE_OPTIONS: { id: PlayerType; label: string }[] = [
 export function KundenScreen({ customers, allAppointments, loading, onSelectCustomer, onCreateCustomer }: Props) {
   const [query, setQuery] = useState('');
   const [filterType, setFilterType] = useState<PlayerType | 'all'>('all');
+  const [filterLocation, setFilterLocation] = useState<Location | 'all'>('all');
+  const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
   const [showForm, setShowForm] = useState(false);
   const [formEmail, setFormEmail] = useState('');
   const [formName, setFormName] = useState('');
@@ -93,6 +95,8 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
     const q = query.toLowerCase().trim();
     let list = customers;
     if (filterType !== 'all') list = list.filter(c => c.player_type === filterType);
+    if (filterLocation !== 'all') list = list.filter(c => c.location === filterLocation);
+    if (filterActive !== 'all') list = list.filter(c => (filterActive === 'active' ? c.is_active : !c.is_active));
     if (!q) return list;
     return list.filter(c =>
       (c.full_name ?? '').toLowerCase().includes(q) ||
@@ -100,7 +104,7 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
       (c.phone ?? '').includes(q) ||
       String(c.customer_number).includes(q)
     );
-  }, [customers, query, filterType]);
+  }, [customers, query, filterType, filterLocation, filterActive]);
 
   if (loading) return <ActivityIndicator style={{ flex: 1 }} color="#4A8FE8" />;
 
@@ -217,8 +221,9 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
         </View>
       )}
 
-      {/* Filter Tabs */}
+      {/* Filter Tabs — mehrere Dimensionen gleichzeitig kombinierbar (UND) */}
       <View style={styles.filterRow}>
+        <Text style={styles.filterLabel}>Typ</Text>
         {(['all', 'feldspieler', 'torwart'] as const).map(t => (
           <TouchableOpacity
             key={t}
@@ -228,6 +233,38 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
           >
             <Text style={[styles.filterChipText, filterType === t && styles.filterChipTextActive]}>
               {t === 'all' ? 'Alle' : t === 'feldspieler' ? 'Feldspieler' : 'Torwart'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.filterRow}>
+        <Text style={styles.filterLabel}>Standort</Text>
+        {(['all', ...LOCATIONS] as const).map(loc => (
+          <TouchableOpacity
+            key={loc}
+            style={[styles.filterChip, filterLocation === loc && styles.filterChipActive]}
+            onPress={() => setFilterLocation(loc)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.filterChipText, filterLocation === loc && styles.filterChipTextActive]}>
+              {loc === 'all' ? 'Alle' : loc}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.filterRow}>
+        <Text style={styles.filterLabel}>Status</Text>
+        {([['all', 'Alle'], ['active', 'Aktiv'], ['inactive', 'Inaktiv']] as const).map(([id, label]) => (
+          <TouchableOpacity
+            key={id}
+            style={[styles.filterChip, filterActive === id && styles.filterChipActive]}
+            onPress={() => setFilterActive(id)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.filterChipText, filterActive === id && styles.filterChipTextActive]}>
+              {label}
             </Text>
           </TouchableOpacity>
         ))}
@@ -278,6 +315,11 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
                       </Text>
                     </View>
                   )}
+                  {!c.is_active && (
+                    <View style={styles.inactiveBadge}>
+                      <Text style={styles.inactiveBadgeText}>Inaktiv</Text>
+                    </View>
+                  )}
                 </View>
                 <Text style={styles.sub}>
                   {c.parent_name ? `Eltern: ${c.parent_name} · ` : ''}{c.email ?? '—'}
@@ -301,7 +343,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 32, paddingBottom: 16 },
   title: { fontSize: 26, fontWeight: '800', color: '#152238' },
   count: { fontSize: 14, color: '#4A6080', fontWeight: '500' },
-  filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 32, marginBottom: 12 },
+  filterRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingHorizontal: 32, marginBottom: 12 },
+  filterLabel: { fontSize: 11, fontWeight: '700', color: '#7A90AE', textTransform: 'uppercase', letterSpacing: 0.5, width: 64 },
   filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1.5, borderColor: 'rgba(21,34,56,0.08)' },
   filterChipActive: { borderColor: '#4A8FE8', backgroundColor: 'rgba(74,143,232,0.08)' },
   filterChipText: { fontSize: 13, fontWeight: '600', color: '#4A6080' },
@@ -331,6 +374,8 @@ const styles = StyleSheet.create({
   name: { fontSize: 15, fontWeight: '700', color: '#152238' },
   levelBadge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
   levelBadgeText: { fontSize: 11, fontWeight: '700' },
+  inactiveBadge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: 'rgba(156,163,175,0.15)', borderColor: '#9CA3AF' },
+  inactiveBadgeText: { fontSize: 11, fontWeight: '700', color: '#6B7280' },
   sub: { fontSize: 13, color: '#4A6080' },
   right: { alignItems: 'flex-end', gap: 3 },
   customerNr: { fontSize: 13, fontWeight: '700', color: '#4A8FE8' },
