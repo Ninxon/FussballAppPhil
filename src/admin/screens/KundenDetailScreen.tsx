@@ -37,10 +37,11 @@ interface Props {
   tokenCounts?: { individual: number; gruppe: number };
   onBack: () => void;
   onCancelAppointment: (id: string) => Promise<{ error: any }>;
-  onAddAppointment: (userId: string, date: string, time: string, program: string, trainerId?: string | null) => Promise<{ error: any }>;
-  onAddRecurring: (userId: string, dates: string[], time: string, program: string, trainerId?: string | null) => Promise<{ error: { message: string } | null; conflicts: { date: string; reason: string }[]; created: number }>;
+  onAddAppointment: (userId: string, date: string, time: string, program: string, trainerId?: string | null, skipGroupCompat?: boolean) => Promise<{ error: any }>;
+  onAddRecurring: (userId: string, dates: string[], time: string, program: string, trainerId?: string | null, skipGroupCompat?: boolean) => Promise<{ error: { message: string } | null; conflicts: { date: string; reason: string }[]; created: number }>;
   onSaveLevel: (customerId: string, level: PlayerLevel | null) => Promise<{ error: any }>;
   onSaveBookingPermissions: (customerId: string, permissions: Partial<BookingPermissions>) => Promise<{ error: any }>;
+  onSaveGroupExempt: (customerId: string, value: boolean) => Promise<{ error: any }>;
   onSaveProfile: (customerId: string, fields: Partial<Pick<CustomerProfile, 'full_name' | 'player_type' | 'parent_name' | 'location' | 'birth_date' | 'phone' | 'address'>>) => Promise<{ error: any }>;
   onSaveEmail: (customerId: string, email: string) => Promise<{ error: { message: string } | null }>;
   onToggleActive: (customerId: string, isActive: boolean) => Promise<{ error: any }>;
@@ -95,7 +96,7 @@ function ApptRow({ appt, onCancel }: { appt: AdminAppointment; onCancel?: (id: s
 export function KundenDetailScreen({
   customer, appointments, trainers, tokenCounts,
   onBack, onCancelAppointment, onAddAppointment, onAddRecurring,
-  onSaveLevel, onSaveBookingPermissions, onSaveProfile, onSaveEmail,
+  onSaveLevel, onSaveBookingPermissions, onSaveGroupExempt, onSaveProfile, onSaveEmail,
   onToggleActive, onResetTokens, onMarkAttended, onDeleteCustomer,
 }: Props) {
   const ts = todayStr();
@@ -110,6 +111,8 @@ export function KundenDetailScreen({
   const [bookTrainerId, setBookTrainerId] = useState<string | null>(trainers[0]?.id ?? null);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
+  // Einmalige Befreiung von der Alters-/Level-Prüfung nur für diese Buchung.
+  const [bookSkipCompat, setBookSkipCompat] = useState(false);
 
   // Serien-/Folgebuchung
   const [bookRecurring, setBookRecurring] = useState(false);
@@ -189,23 +192,23 @@ export function KundenDetailScreen({
       }
       if (seriesDates.length === 0) { setBookingError('Keine Termine im gewählten Zeitraum.'); return; }
       setBookingLoading(true);
-      const { error, conflicts, created } = await onAddRecurring(customer.id, seriesDates, bookTime, bookProgram, bookTrainerId);
+      const { error, conflicts, created } = await onAddRecurring(customer.id, seriesDates, bookTime, bookProgram, bookTrainerId, bookSkipCompat);
       setBookingLoading(false);
       if (error) { setBookingError(error.message); return; }
       if (conflicts.length > 0) { setRecResult({ created: 0, conflicts }); return; }
       setRecResult({ created, conflicts: [] });
       setShowBooking(false); setBookDate(''); setBookingError(null);
-      setBookTrainerId(trainers[0]?.id ?? null); setBookRecurring(false);
+      setBookTrainerId(trainers[0]?.id ?? null); setBookRecurring(false); setBookSkipCompat(false);
       return;
     }
 
     const confirmedOnDay = appointments.filter(a => a.date === bookDate && a.status === 'confirmed');
     if (confirmedOnDay.length >= 2) { setBookingError('Bereits zwei Termine an diesem Tag.'); return; }
     setBookingLoading(true);
-    const { error } = await onAddAppointment(customer.id, bookDate, bookTime, bookProgram, bookTrainerId);
+    const { error } = await onAddAppointment(customer.id, bookDate, bookTime, bookProgram, bookTrainerId, bookSkipCompat);
     setBookingLoading(false);
     if (error) setBookingError(error.message ?? 'Buchung fehlgeschlagen.');
-    else { setShowBooking(false); setBookDate(''); setBookingError(null); setBookTrainerId(trainers[0]?.id ?? null); }
+    else { setShowBooking(false); setBookDate(''); setBookingError(null); setBookTrainerId(trainers[0]?.id ?? null); setBookSkipCompat(false); }
   };
 
   const doSetLevel = async (level: PlayerLevel | null) => {
@@ -219,6 +222,12 @@ export function KundenDetailScreen({
   const doTogglePermission = async (key: keyof BookingPermissions, value: boolean) => {
     setPermError(null);
     const { error } = await onSaveBookingPermissions(customer.id, { [key]: value });
+    if (error) setPermError(error.message ?? 'Fehler beim Speichern.');
+  };
+
+  const doToggleGroupExempt = async (value: boolean) => {
+    setPermError(null);
+    const { error } = await onSaveGroupExempt(customer.id, value);
     if (error) setPermError(error.message ?? 'Fehler beim Speichern.');
   };
 
@@ -487,6 +496,21 @@ export function KundenDetailScreen({
           </View>
         ))}
 
+        <View style={styles.exemptBox}>
+          <View style={styles.exemptRow}>
+            <Text style={styles.exemptLabel}>Alters-/Level-Prüfung ignorieren (Gruppen)</Text>
+            <Switch
+              value={!!customer.skip_group_age_level_check}
+              onValueChange={doToggleGroupExempt}
+              trackColor={{ false: '#E5E7EB', true: '#F5A84A' }}
+              thumbColor="#fff"
+            />
+          </View>
+          <Text style={styles.exemptHint}>
+            Wenn aktiv, kann dieser Spieler vom Admin in jede Gruppe gebucht werden — auch wenn Alter/Level normalerweise nicht passen. Kapazität, Tageslimit und Trainer-Verfügbarkeit bleiben aktiv. Gilt nur für Admin-Buchungen, nicht für die Kundensicht.
+          </Text>
+        </View>
+
         {permError && <Text style={styles.fieldError}>{permError}</Text>}
 
         <Text style={styles.sectionLabel}>Aktive Nachholtermine</Text>
@@ -716,6 +740,18 @@ export function KundenDetailScreen({
               </View>
             )}
 
+            {PROGRAM_CATEGORY[bookProgram as ProgramId] === 'gruppe' && !customer.skip_group_age_level_check && (
+              <View style={styles.recurToggleRow}>
+                <Text style={styles.permLabel}>Sonderregel: Alters-/Level-Prüfung für diese Buchung übergehen</Text>
+                <Switch
+                  value={bookSkipCompat}
+                  onValueChange={setBookSkipCompat}
+                  trackColor={{ false: '#E5E7EB', true: '#F5A84A' }}
+                  thumbColor="#fff"
+                />
+              </View>
+            )}
+
             {bookingError && <Text style={styles.fieldError}>{bookingError}</Text>}
             <TouchableOpacity
               style={[styles.saveBtn, (bookingLoading || trainers.length === 0) && { opacity: 0.5 }]}
@@ -815,6 +851,10 @@ const styles = StyleSheet.create({
   permRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#EEF3FB' },
   permLabel: { fontSize: 14, color: '#374151', fontWeight: '500' },
   sectionLabel: { fontSize: 13, fontWeight: '700', color: '#4A6080', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 16, marginBottom: 8 },
+  exemptBox: { marginTop: 14, backgroundColor: '#FFFBEB', borderRadius: 10, borderWidth: 1, borderColor: '#FDE68A', padding: 14 },
+  exemptRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  exemptLabel: { flex: 1, fontSize: 14, color: '#92400E', fontWeight: '700' },
+  exemptHint: { fontSize: 12, color: '#92400E', lineHeight: 17, marginTop: 8 },
   tokenDisplayRow: { flexDirection: 'row', gap: 10 },
   tokenDisplayItem: { flex: 1, backgroundColor: '#F4F8FF', borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(21,34,56,0.08)' },
   tokenDisplayCount: { fontSize: 28, fontWeight: '800', color: '#152238' },

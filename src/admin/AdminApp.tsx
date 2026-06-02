@@ -43,7 +43,7 @@ export function AdminApp({ onLogout }: Props) {
     customers, allAppointments, trainers, trainerSchedules, trainerMonthlyCounts, activeTokensByCustomer, loading, loadError,
     cancelAppointment, addAppointmentForCustomer, addRecurringAppointments,
     createCustomer, deleteCustomer,
-    saveCustomerLevel, saveBookingPermissions, saveCustomerProfile,
+    saveCustomerLevel, saveBookingPermissions, saveCustomerProfile, saveGroupCompatExempt,
     saveCustomerEmail, toggleCustomerActive, resetCustomerTokens,
     setScheduleSlot, createTrainer, updateTrainer, deleteTrainer,
     markAttended,
@@ -130,6 +130,7 @@ export function AdminApp({ onLogout }: Props) {
           onAddRecurring={addRecurringAppointments}
           onSaveLevel={saveCustomerLevel}
           onSaveBookingPermissions={saveBookingPermissions}
+          onSaveGroupExempt={saveGroupCompatExempt}
           onSaveProfile={saveCustomerProfile}
           onSaveEmail={saveCustomerEmail}
           onToggleActive={toggleCustomerActive}

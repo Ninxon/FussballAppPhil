@@ -23,6 +23,7 @@ export type CustomerProfile = {
   is_active: boolean;
   role: string;
   level: PlayerLevel | null;
+  skip_group_age_level_check: boolean;
 } & BookingPermissions;
 
 export type AdminAppointment = {
@@ -134,7 +135,7 @@ export function useAdminData() {
   // Wird sowohl von der Einzel- als auch der Serien-Buchung genutzt.
   const validateBooking = async (
     userId: string, date: string, time: string, program: string,
-    trainerId?: string | null,
+    trainerId?: string | null, forceSkipCompat = false,
   ): Promise<{ error: { message: string } | null }> => {
     // No bookings in the past — neither past days nor past times today. The
     // time guard also catches the default slot staying selected after its chip
@@ -198,7 +199,11 @@ export function useAdminData() {
     const birthYear = customer?.birth_date ? parseInt(customer.birth_date.slice(0, 4)) : null;
     const level = customer?.level ?? null;
 
-    if (PROGRAM_CATEGORY[program as ProgramId] === 'gruppe' && birthYear && level) {
+    // Alters-/Level-Kompatibilität kann pro Spieler (Profil-Flag) oder pro
+    // Buchung (forceSkipCompat) durch den Admin übergangen werden. Nur DIESER
+    // Check entfällt dann — Kapazität, Tageslimit etc. bleiben aktiv.
+    const exemptCompat = forceSkipCompat || custProfile?.skip_group_age_level_check === true;
+    if (PROGRAM_CATEGORY[program as ProgramId] === 'gruppe' && birthYear && level && !exemptCompat) {
       // Ein Trainer = eine Gruppe (Kapazität 4, ein Programm pro Trainer/Slot).
       // Daher nur gegen die Spieler DESSELBEN Trainers auf Kompatibilität prüfen —
       // sonst blockiert die erste Gruppe fälschlich jede weitere Gruppe (anderer
@@ -249,9 +254,9 @@ export function useAdminData() {
 
   const addAppointmentForCustomer = async (
     userId: string, date: string, time: string, program: string,
-    trainerId?: string | null,
+    trainerId?: string | null, skipGroupCompat = false,
   ) => {
-    const { error: vErr } = await validateBooking(userId, date, time, program, trainerId);
+    const { error: vErr } = await validateBooking(userId, date, time, program, trainerId, skipGroupCompat);
     if (vErr) return { error: vErr };
 
     const { data, error } = await insertBooking(userId, date, time, program, trainerId);
@@ -268,7 +273,7 @@ export function useAdminData() {
   // eingefügten Termine wieder gelöscht (Rollback) — kein Teil-Ergebnis.
   const addRecurringAppointments = async (
     userId: string, dates: string[], time: string, program: string,
-    trainerId?: string | null,
+    trainerId?: string | null, skipGroupCompat = false,
   ): Promise<{ error: { message: string } | null; conflicts: { date: string; reason: string }[]; created: number }> => {
     if (dates.length === 0) {
       return { error: { message: 'Keine Termine im gewählten Zeitraum.' }, conflicts: [], created: 0 };
@@ -277,7 +282,7 @@ export function useAdminData() {
     // 1. Vorab alle prüfen.
     const conflicts: { date: string; reason: string }[] = [];
     for (const date of dates) {
-      const { error } = await validateBooking(userId, date, time, program, trainerId);
+      const { error } = await validateBooking(userId, date, time, program, trainerId, skipGroupCompat);
       if (error) conflicts.push({ date, reason: error.message });
     }
     if (conflicts.length > 0) {
@@ -345,6 +350,14 @@ export function useAdminData() {
   const saveBookingPermissions = async (customerId: string, permissions: Partial<BookingPermissions>) => {
     const { error } = await ProfileService.update(customerId, permissions as Record<string, unknown>);
     if (!error) setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, ...permissions } : c));
+    return { error };
+  };
+
+  // Langfristige Befreiung eines Spielers von der Gruppen-Alters-/Level-Prüfung
+  // (greift nur im Admin-Buchungspfad; per RLS + Guard-Trigger admin-only).
+  const saveGroupCompatExempt = async (customerId: string, value: boolean) => {
+    const { error } = await ProfileService.update(customerId, { skip_group_age_level_check: value });
+    if (!error) setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, skip_group_age_level_check: value } : c));
     return { error };
   };
 
@@ -499,7 +512,7 @@ export function useAdminData() {
     customers, allAppointments, trainers, trainerSchedules, trainerMonthlyCounts, activeTokensByCustomer, loading, loadError,
     cancelAppointment, addAppointmentForCustomer, addRecurringAppointments,
     createCustomer, deleteCustomer,
-    saveCustomerLevel, saveBookingPermissions, saveCustomerProfile,
+    saveCustomerLevel, saveBookingPermissions, saveCustomerProfile, saveGroupCompatExempt,
     saveCustomerEmail, toggleCustomerActive, resetCustomerTokens,
     setScheduleSlot, createTrainer, updateTrainer, deleteTrainer,
     markAttended,

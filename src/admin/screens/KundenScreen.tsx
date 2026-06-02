@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Activi
 import { CustomerProfile, AdminAppointment } from '../hooks/useAdminData';
 import { LEVEL_COLORS, LEVEL_LABELS, PlayerLevel, PlayerType } from '../../types';
 import { LOCATIONS, Location } from '../../constants/studio';
+import { todayStr } from '../../constants/i18n';
 
 interface Props {
   customers: CustomerProfile[];
@@ -31,6 +32,7 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
   const [filterType, setFilterType] = useState<PlayerType | 'all'>('all');
   const [filterLocation, setFilterLocation] = useState<Location | 'all'>('all');
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
+  const [filterAppt, setFilterAppt] = useState<'all' | 'with' | 'without'>('all');
   const [showForm, setShowForm] = useState(false);
   const [formEmail, setFormEmail] = useState('');
   const [formName, setFormName] = useState('');
@@ -97,6 +99,15 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
     if (filterType !== 'all') list = list.filter(c => c.player_type === filterType);
     if (filterLocation !== 'all') list = list.filter(c => c.location === filterLocation);
     if (filterActive !== 'all') list = list.filter(c => (filterActive === 'active' ? c.is_active : !c.is_active));
+    if (filterAppt !== 'all') {
+      const ts = todayStr();
+      list = list.filter(c => {
+        const hasUpcoming = allAppointments.some(
+          a => a.user_id === c.id && a.status === 'confirmed' && a.date >= ts,
+        );
+        return filterAppt === 'with' ? hasUpcoming : !hasUpcoming;
+      });
+    }
     if (!q) return list;
     return list.filter(c =>
       (c.full_name ?? '').toLowerCase().includes(q) ||
@@ -104,7 +115,7 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
       (c.phone ?? '').includes(q) ||
       String(c.customer_number).includes(q)
     );
-  }, [customers, query, filterType, filterLocation, filterActive]);
+  }, [customers, query, filterType, filterLocation, filterActive, filterAppt, allAppointments]);
 
   if (loading) return <ActivityIndicator style={{ flex: 1 }} color="#4A8FE8" />;
 
@@ -264,6 +275,22 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
             activeOpacity={0.7}
           >
             <Text style={[styles.filterChipText, filterActive === id && styles.filterChipTextActive]}>
+              {label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.filterRow}>
+        <Text style={styles.filterLabel}>Termine</Text>
+        {([['all', 'Alle'], ['with', 'Mit Terminen'], ['without', 'Keine Termine']] as const).map(([id, label]) => (
+          <TouchableOpacity
+            key={id}
+            style={[styles.filterChip, filterAppt === id && styles.filterChipActive]}
+            onPress={() => setFilterAppt(id)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.filterChipText, filterAppt === id && styles.filterChipTextActive]}>
               {label}
             </Text>
           </TouchableOpacity>

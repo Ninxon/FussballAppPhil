@@ -575,6 +575,7 @@ BEGIN
     OR NEW.can_book_athletik             IS DISTINCT FROM OLD.can_book_athletik
     OR NEW.can_book_torhueter_individual IS DISTINCT FROM OLD.can_book_torhueter_individual
     OR NEW.can_book_torhueter_gruppe     IS DISTINCT FROM OLD.can_book_torhueter_gruppe
+    OR NEW.skip_group_age_level_check    IS DISTINCT FROM OLD.skip_group_age_level_check
     OR NEW.player_type                   IS DISTINCT FROM OLD.player_type
     OR NEW.parent_name                   IS DISTINCT FROM OLD.parent_name
     OR NEW.trainer_specialty             IS DISTINCT FROM OLD.trainer_specialty
@@ -814,6 +815,7 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "parent_name" "text",
     "location" "text",
     "trainer_specialty" "text",
+    "skip_group_age_level_check" boolean DEFAULT false NOT NULL,
     CONSTRAINT "profiles_level_check" CHECK ((("level" IS NULL) OR ("level" = ANY (ARRAY['anfaenger'::"text", 'amateur'::"text", 'profi'::"text", 'experte'::"text"])))),
     CONSTRAINT "profiles_player_type_check" CHECK ((("player_type" IS NULL) OR ("player_type" = ANY (ARRAY['torwart'::"text", 'feldspieler'::"text"])))),
     CONSTRAINT "profiles_role_check" CHECK (("role" = ANY (ARRAY['admin'::"text", 'customer'::"text", 'trainer'::"text"]))),
