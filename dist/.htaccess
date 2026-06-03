@@ -1,0 +1,7 @@
+# Sicherheits-Header als echte HTTP-Header (als <meta> wirkungslos).
+# In <IfModule> gekapselt: fehlt mod_headers, werden die Zeilen ignoriert
+# statt einen 500 zu werfen.
+<IfModule mod_headers.c>
+  Header always set X-Frame-Options "DENY"
+  Header always set X-Content-Type-Options "nosniff"
+</IfModule>

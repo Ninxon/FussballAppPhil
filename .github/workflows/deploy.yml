@@ -45,7 +45,7 @@ jobs:
           NEW_BUNDLE="$(basename "$(ls dist/_expo/static/js/web/AppEntry-*.js | head -n1)")"
           echo "Fresh bundle: $NEW_BUNDLE"
           git checkout HEAD -- \
-            dist/index.html dist/manifest.json dist/sw.js \
+            dist/index.html dist/manifest.json dist/sw.js dist/.htaccess \
             dist/favicon.png dist/icon-192.png dist/icon-512.png
           sed -i -E "s#AppEntry-[a-f0-9]+\.js#${NEW_BUNDLE}#g" dist/index.html
           # Drop any stale committed bundle so only the fresh one ships.
@@ -70,5 +70,8 @@ jobs:
           # actually goes live.
           put -O /public/APP ./dist/index.html
           put -O /public/APP ./dist/sw.js
+          # .htaccess (Dotfile) explizit hochladen, damit die Sicherheits-Header
+          # zuverlässig im Dokument-Root landen.
+          put -O /public/APP ./dist/.htaccess
           bye
           LFTP

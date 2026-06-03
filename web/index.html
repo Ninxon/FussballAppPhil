@@ -22,10 +22,9 @@
       "
     />
 
-    <!-- Verhindert Clickjacking -->
-    <meta http-equiv="X-Frame-Options" content="DENY" />
-    <!-- Verhindert MIME-Sniffing -->
-    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <!-- Clickjacking- (X-Frame-Options) und MIME-Sniffing-Schutz
+         (X-Content-Type-Options) werden als echte HTTP-Header via .htaccess
+         gesetzt — als <meta> ignoriert der Browser sie (Konsolen-Warnung). -->
     <!-- Kein Referrer an externe Seiten -->
     <meta name="referrer" content="strict-origin-when-cross-origin" />
 
