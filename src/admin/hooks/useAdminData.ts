@@ -106,11 +106,22 @@ export function useAdminData() {
     setLoading(false);
   };
 
-  const cancelAppointment = async (id: string) => {
+  const cancelAppointment = async (id: string, reason?: string) => {
     const { data, error } = await supabase.rpc('cancel_and_issue_token', { p_appointment_id: id, p_skip_token: false });
     if (error) return { error };
     const result = data as { error?: string; token?: unknown } | null;
     if (result?.error) return { error: { message: result.error } };
+
+    // Kunde per E-Mail über die Admin-Stornierung informieren (fire-and-forget;
+    // ein Mail-Fehler darf die erfolgreiche Stornierung nicht zurückrollen).
+    try {
+      const { error: mailError } = await supabase.functions.invoke('send-admin-cancellation-email', {
+        body: { appointmentId: id, reason: reason?.trim() || undefined },
+      });
+      if (mailError) console.warn('Storno-Mail fehlgeschlagen:', mailError.message);
+    } catch (e) {
+      console.warn('Storno-Mail nicht erreichbar:', e);
+    }
 
     const appt = allAppointments.find(a => a.id === id);
     if (appt) {

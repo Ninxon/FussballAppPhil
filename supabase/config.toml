@@ -434,6 +434,12 @@ entrypoint = "./functions/send-cancellation-email/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/send-cancellation-email/*.html" ]
 
+[functions.send-admin-cancellation-email]
+enabled = true
+verify_jwt = true
+import_map = "./functions/send-admin-cancellation-email/deno.json"
+entrypoint = "./functions/send-admin-cancellation-email/index.ts"
+
 [functions.send-reminders]
 enabled = true
 # Muss false bleiben: pg_cron ruft die Funktion ohne Supabase-JWT auf,

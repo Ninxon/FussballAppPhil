@@ -83,7 +83,7 @@ interface Props {
   trainers:            TrainerProfile[];
   loading:             boolean;
   initialDay?:         string;
-  onCancelAppointment: (id: string) => Promise<{ error: any }>;
+  onCancelAppointment: (id: string, reason?: string) => Promise<{ error: any }>;
   onAddAppointment:    (userId: string, date: string, time: string, program: string, trainerId?: string | null) => Promise<{ error: any }>;
 }
 
@@ -101,6 +101,7 @@ export function TerminkalenderScreen({
   const [selectedApptId,  setSelectedApptId]  = useState<string | null>(null);
   const [cancelLoading,   setCancelLoading]   = useState(false);
   const [cancelError,     setCancelError]     = useState<string | null>(null);
+  const [cancelReason,    setCancelReason]    = useState('');
   const [expandedGroupKey,setExpandedGroupKey]= useState<string | null>(null);
 
   const [bookingDay,       setBookingDay]       = useState<string | null>(null);
@@ -137,12 +138,12 @@ export function TerminkalenderScreen({
     setBookingDay(null); setSelectedApptId(null); setExpandedGroupKey(null);
   };
 
-  const handleCancelAppt = async (id: string) => {
+  const handleCancelAppt = async (id: string, reason?: string) => {
     setCancelLoading(true); setCancelError(null);
-    const { error } = await onCancelAppointment(id);
+    const { error } = await onCancelAppointment(id, reason);
     setCancelLoading(false);
     if (error) setCancelError(error.message ?? 'Fehler beim Stornieren.');
-    else { setSelectedApptId(null); setExpandedGroupKey(null); }
+    else { setSelectedApptId(null); setExpandedGroupKey(null); setCancelReason(''); }
   };
 
   const openBookingDay = (ds: string, presetTime?: string) => {
@@ -489,17 +490,25 @@ export function TerminkalenderScreen({
                     <Text style={s.detailMeta}>
                       {selAppt.time} Uhr{selTrainer ? ` · ${selTrainer.full_name}` : ''}
                     </Text>
+                    <TextInput
+                      style={s.cancelReasonInput}
+                      value={cancelReason}
+                      onChangeText={setCancelReason}
+                      placeholder="Grund (optional) – wird dem Kunden per E-Mail mitgeteilt"
+                      placeholderTextColor={C.textFaint}
+                      multiline
+                    />
                     {cancelError && <Text style={s.errorText}>{cancelError}</Text>}
                     <TouchableOpacity
                       style={[s.stornBtn, cancelLoading && { opacity: 0.6 }]}
-                      onPress={() => handleCancelAppt(selAppt.id)}
+                      onPress={() => handleCancelAppt(selAppt.id, cancelReason)}
                       activeOpacity={0.7}
                       disabled={cancelLoading}
                     >
                       <Text style={s.stornBtnText}>{cancelLoading ? 'Stornieren…' : 'Termin stornieren'}</Text>
                     </TouchableOpacity>
                   </View>
-                  <TouchableOpacity onPress={() => setSelectedApptId(null)} style={s.detailClose}>
+                  <TouchableOpacity onPress={() => { setSelectedApptId(null); setCancelReason(''); }} style={s.detailClose}>
                     <Text style={s.detailCloseText}>✕</Text>
                   </TouchableOpacity>
                 </View>
@@ -700,34 +709,52 @@ export function TerminkalenderScreen({
                 </Text>
 
                 {isGrp ? (
-                  <View style={s.participantList}>
-                    {expandedDetail.map(a => {
-                      const cust   = customers.find(c => c.id === a.user_id);
-                      const isThis = selectedApptId === a.id;
-                      return (
-                        <View key={a.id} style={s.participantRow}>
-                          <View style={[s.participantDot, { backgroundColor: color }]} />
-                          <Text style={s.participantName} numberOfLines={1}>{cust?.full_name ?? '—'}</Text>
-                          {cancelError && isThis && <Text style={s.errorText}>{cancelError}</Text>}
-                          <TouchableOpacity
-                            style={[s.miniStornBtn, cancelLoading && isThis && { opacity: 0.5 }]}
-                            onPress={() => { setSelectedApptId(a.id); handleCancelAppt(a.id); }}
-                            activeOpacity={0.7}
-                            disabled={cancelLoading && isThis}
-                          >
-                            <Text style={s.miniStornBtnText}>{cancelLoading && isThis ? '…' : 'Stornieren'}</Text>
-                          </TouchableOpacity>
-                        </View>
-                      );
-                    })}
-                  </View>
+                  <>
+                    <TextInput
+                      style={s.cancelReasonInput}
+                      value={cancelReason}
+                      onChangeText={setCancelReason}
+                      placeholder="Grund (optional) – wird dem stornierten Kunden per E-Mail mitgeteilt"
+                      placeholderTextColor={C.textFaint}
+                      multiline
+                    />
+                    <View style={s.participantList}>
+                      {expandedDetail.map(a => {
+                        const cust   = customers.find(c => c.id === a.user_id);
+                        const isThis = selectedApptId === a.id;
+                        return (
+                          <View key={a.id} style={s.participantRow}>
+                            <View style={[s.participantDot, { backgroundColor: color }]} />
+                            <Text style={s.participantName} numberOfLines={1}>{cust?.full_name ?? '—'}</Text>
+                            {cancelError && isThis && <Text style={s.errorText}>{cancelError}</Text>}
+                            <TouchableOpacity
+                              style={[s.miniStornBtn, cancelLoading && isThis && { opacity: 0.5 }]}
+                              onPress={() => { setSelectedApptId(a.id); handleCancelAppt(a.id, cancelReason); }}
+                              activeOpacity={0.7}
+                              disabled={cancelLoading && isThis}
+                            >
+                              <Text style={s.miniStornBtnText}>{cancelLoading && isThis ? '…' : 'Stornieren'}</Text>
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </>
                 ) : (
                   <View>
                     <Text style={s.detailName}>{customers.find(c => c.id === first.user_id)?.full_name ?? '—'}</Text>
+                    <TextInput
+                      style={s.cancelReasonInput}
+                      value={cancelReason}
+                      onChangeText={setCancelReason}
+                      placeholder="Grund (optional) – wird dem Kunden per E-Mail mitgeteilt"
+                      placeholderTextColor={C.textFaint}
+                      multiline
+                    />
                     {cancelError && <Text style={s.errorText}>{cancelError}</Text>}
                     <TouchableOpacity
                       style={[s.stornBtn, cancelLoading && { opacity: 0.6 }]}
-                      onPress={() => handleCancelAppt(first.id)}
+                      onPress={() => handleCancelAppt(first.id, cancelReason)}
                       activeOpacity={0.7}
                       disabled={cancelLoading}
                     >
@@ -736,7 +763,7 @@ export function TerminkalenderScreen({
                   </View>
                 )}
               </View>
-              <TouchableOpacity onPress={() => setExpandedGroupKey(null)} style={s.detailClose}>
+              <TouchableOpacity onPress={() => { setExpandedGroupKey(null); setCancelReason(''); }} style={s.detailClose}>
                 <Text style={s.detailCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -846,6 +873,11 @@ const s = StyleSheet.create({
   stornBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
 
   errorText:    { fontSize: 12, color: C.danger, fontWeight: '600', marginTop: 6 },
+  cancelReasonInput: {
+    backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderRadius: 8,
+    paddingHorizontal: 11, paddingVertical: 8, fontSize: 13, color: C.text,
+    marginTop: 10, minHeight: 52, textAlignVertical: 'top', outlineWidth: 0,
+  } as any,
 
   // ── Booking panel ──────────────────────────────────────────────────────────
   bookPanel: {

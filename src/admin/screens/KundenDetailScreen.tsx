@@ -36,7 +36,7 @@ interface Props {
   trainers: TrainerProfile[];
   tokenCounts?: { individual: number; gruppe: number };
   onBack: () => void;
-  onCancelAppointment: (id: string) => Promise<{ error: any }>;
+  onCancelAppointment: (id: string, reason?: string) => Promise<{ error: any }>;
   onAddAppointment: (userId: string, date: string, time: string, program: string, trainerId?: string | null, skipGroupCompat?: boolean) => Promise<{ error: any }>;
   onAddRecurring: (userId: string, dates: string[], time: string, program: string, trainerId?: string | null, skipGroupCompat?: boolean) => Promise<{ error: { message: string } | null; conflicts: { date: string; reason: string }[]; created: number }>;
   onSaveLevel: (customerId: string, level: PlayerLevel | null) => Promise<{ error: any }>;
@@ -68,26 +68,64 @@ function SectionCard({ title, children }: { title: string; children: React.React
   );
 }
 
-function ApptRow({ appt, onCancel }: { appt: AdminAppointment; onCancel?: (id: string) => void }) {
+function ApptRow({ appt, onCancel }: { appt: AdminAppointment; onCancel?: (id: string, reason?: string) => Promise<{ error: any }> }) {
   const prog = PROGRAMS.find(p => p.id === appt.program);
   const color = PROGRAM_COLORS[appt.program] ?? '#4A8FE8';
   const ts = todayStr();
   const isUpcoming = appt.status === 'confirmed' && appt.date >= ts;
   const dimmed = appt.status === 'cancelled' || appt.date < ts;
+
+  const [confirming, setConfirming] = useState(false);
+  const [reason, setReason] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const doCancel = async () => {
+    if (!onCancel) return;
+    setLoading(true); setError(null);
+    const { error: err } = await onCancel(appt.id, reason.trim() || undefined);
+    setLoading(false);
+    if (err) setError(err.message ?? 'Fehler beim Stornieren.');
+    else { setConfirming(false); setReason(''); }
+  };
+
   return (
-    <View style={[styles.apptRow, dimmed && { opacity: 0.5 }]}>
-      <View style={[styles.apptColorBar, { backgroundColor: dimmed ? '#D1D5DB' : color }]} />
-      <View style={styles.apptInfo}>
-        <Text style={[styles.apptProg, { color: appt.status === 'cancelled' ? '#7A90AE' : color }]}>{prog?.name ?? appt.program}</Text>
-        <Text style={styles.apptDate}>{fmtDate(appt.date)} · {appt.time} Uhr</Text>
+    <View>
+      <View style={[styles.apptRow, dimmed && { opacity: 0.5 }]}>
+        <View style={[styles.apptColorBar, { backgroundColor: dimmed ? '#D1D5DB' : color }]} />
+        <View style={styles.apptInfo}>
+          <Text style={[styles.apptProg, { color: appt.status === 'cancelled' ? '#7A90AE' : color }]}>{prog?.name ?? appt.program}</Text>
+          <Text style={styles.apptDate}>{fmtDate(appt.date)} · {appt.time} Uhr</Text>
+        </View>
+        {appt.status === 'cancelled' && (
+          <View style={styles.cancelledBadge}><Text style={styles.cancelledText}>Storniert</Text></View>
+        )}
+        {isUpcoming && onCancel && !confirming && (
+          <TouchableOpacity style={styles.stornBtn} onPress={() => setConfirming(true)} activeOpacity={0.7}>
+            <Text style={styles.stornText}>Stornieren</Text>
+          </TouchableOpacity>
+        )}
       </View>
-      {appt.status === 'cancelled' && (
-        <View style={styles.cancelledBadge}><Text style={styles.cancelledText}>Storniert</Text></View>
-      )}
-      {isUpcoming && onCancel && (
-        <TouchableOpacity style={styles.stornBtn} onPress={() => onCancel(appt.id)} activeOpacity={0.7}>
-          <Text style={styles.stornText}>Stornieren</Text>
-        </TouchableOpacity>
+      {confirming && (
+        <View style={styles.stornConfirmBox}>
+          <TextInput
+            style={[styles.input, styles.stornReasonInput]}
+            value={reason}
+            onChangeText={setReason}
+            placeholder="Grund (optional) – wird dem Kunden per E-Mail mitgeteilt"
+            placeholderTextColor="#8A98AC"
+            multiline
+          />
+          {error && <Text style={styles.deleteError}>{error}</Text>}
+          <View style={styles.stornConfirmBtns}>
+            <TouchableOpacity style={[styles.stornConfirmYes, loading && { opacity: 0.6 }]} onPress={doCancel} disabled={loading} activeOpacity={0.7}>
+              <Text style={styles.stornConfirmYesText}>{loading ? 'Wird storniert…' : 'Stornieren & E-Mail senden'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.stornConfirmNo} onPress={() => { setConfirming(false); setReason(''); setError(null); }} activeOpacity={0.7}>
+              <Text style={styles.stornConfirmNoText}>Abbrechen</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       )}
     </View>
   );
@@ -916,6 +954,13 @@ const styles = StyleSheet.create({
   cancelledText: { fontSize: 11, fontWeight: '700', color: '#EF4444' },
   stornBtn: { backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   stornText: { fontSize: 12, fontWeight: '700', color: '#EF4444' },
+  stornConfirmBox: { backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', borderRadius: 12, padding: 14, marginTop: 8, marginBottom: 4 },
+  stornReasonInput: { minHeight: 52, textAlignVertical: 'top', marginBottom: 10 } as any,
+  stornConfirmBtns: { flexDirection: 'row', gap: 10 },
+  stornConfirmYes: { flex: 1, backgroundColor: '#EF4444', borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
+  stornConfirmYesText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  stornConfirmNo: { backgroundColor: 'rgba(21,34,56,0.06)', borderRadius: 10, paddingVertical: 11, paddingHorizontal: 18, alignItems: 'center' },
+  stornConfirmNoText: { fontSize: 13, fontWeight: '600', color: '#4A6080' },
   deleteHeaderBtn: { backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
   deleteHeaderBtnText: { fontSize: 13, fontWeight: '700', color: '#EF4444' },
   deleteConfirmBox: { backgroundColor: '#FEF2F2', borderWidth: 1.5, borderColor: '#FECACA', borderRadius: 14, padding: 20, marginBottom: 16 },
