@@ -8,6 +8,7 @@ jest.mock('../lib/supabase', () => {
     update: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
     order: jest.fn().mockReturnThis(),
+    range: jest.fn().mockReturnThis(),
     is: jest.fn().mockReturnThis(),
     gt: jest.fn().mockReturnThis(),
     single: jest.fn(() => Promise.resolve({ data: null, error: null })),
@@ -47,9 +48,22 @@ describe('AppointmentService.fetchAll', () => {
 });
 
 describe('AppointmentService.fetchAllDesc', () => {
-  it('calls order with ascending false', () => {
-    AppointmentService.fetchAllDesc();
+  it('orders by date desc and pages via range', async () => {
+    const result = await AppointmentService.fetchAllDesc();
     expect(mockChain.order).toHaveBeenCalledWith('date', { ascending: false });
+    expect(mockChain.range).toHaveBeenCalledWith(0, 999);
+    expect(result).toEqual({ data: [], error: null });
+  });
+
+  it('keeps paging until a short page is returned', async () => {
+    const fullPage = Array.from({ length: 1000 }, (_, i) => ({ id: `a${i}` }));
+    (mockChain.then as jest.Mock)
+      .mockImplementationOnce((cb: (v: any) => any) => Promise.resolve(cb({ data: fullPage, error: null })))
+      .mockImplementationOnce((cb: (v: any) => any) => Promise.resolve(cb({ data: [{ id: 'last' }], error: null })));
+    const result = await AppointmentService.fetchAllDesc();
+    expect(mockChain.range).toHaveBeenCalledWith(0, 999);
+    expect(mockChain.range).toHaveBeenCalledWith(1000, 1999);
+    expect(result.data).toHaveLength(1001);
   });
 });
 

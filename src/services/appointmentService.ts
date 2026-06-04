@@ -18,8 +18,29 @@ export const AppointmentService = {
   fetchAll: () =>
     supabase.from('appointments').select(SELECT).order('date', { ascending: true }),
 
-  fetchAllDesc: () =>
-    supabase.from('appointments').select(SELECT).order('date', { ascending: false }),
+  // Admin lädt ALLE Termine über alle Kunden. PostgREST/Supabase deckelt ein
+  // SELECT standardmäßig bei 1000 Zeilen — ohne Paging fielen ab dem 1001.
+  // Termin die frühesten (ältesten) Daten aus der absteigend sortierten Liste,
+  // obwohl sie in der DB stehen (Symptom: der erste Termin einer Serie war
+  // optimistisch sichtbar, „verschwand" aber nach Reload). Daher seitenweise
+  // laden, bis alle Zeilen geholt sind. Sekundärsortierung nach id, damit das
+  // Paging bei gleichem Datum deterministisch bleibt.
+  fetchAllDesc: async (): Promise<{ data: any[] | null; error: any }> => {
+    const PAGE = 1000;
+    const all: any[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(SELECT)
+        .order('date', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, from + PAGE - 1);
+      if (error) return { data: null, error };
+      if (data && data.length) all.push(...data);
+      if (!data || data.length < PAGE) break;
+    }
+    return { data: all, error: null };
+  },
 
   insert: (data: AppointmentInsert) =>
     supabase.from('appointments').insert(data).select(SELECT).single(),
