@@ -247,7 +247,7 @@ export function HomeScreen({ appointments, profile, activeTokens, setTab }: Prop
                   {activeTokens.length > 1 ? ` · ${activeTokens.length} Termine offen` : ''}
                 </Text>
                 <Text style={styles.nachholHint}>
-                  Verfällt 1 Monat nach der Stornierung — jetzt buchen!
+                  Verfällt 1 Monat nach dem stornierten Termin — jetzt buchen!
                 </Text>
               </View>
             </GlassCard>
