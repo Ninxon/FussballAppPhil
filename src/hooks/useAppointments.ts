@@ -183,8 +183,8 @@ export function useAppointments(profile: Profile | null) {
       return { error: { message: 'Nachholtermine können nur mit einem gültigen Stornierungstoken gebucht werden.' } };
     }
 
-    // Use the token's own expires_at (issued_at + 1 month set by DB) rather than
-    // recalculating 28 days here, which was shorter than the actual validity period.
+    // Use the token's own expires_at (set by the DB: one month after the
+    // cancelled appointment's date) rather than recalculating here.
     const maxDate = new Date(activeToken.expires_at);
     if (new Date(date + 'T12:00:00') > maxDate) {
       return { error: { message: `Nachholtermin muss bis ${maxDate.toLocaleDateString('de-DE')} gebucht werden.` } };

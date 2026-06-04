@@ -275,7 +275,11 @@ BEGIN
   INSERT INTO public.cancellation_tokens
     (user_id, category, expires_at, source_appointment_id, makeup_count)
   VALUES (
-    v_appt.user_id, v_category, NOW() + INTERVAL '1 month', p_appointment_id,
+    v_appt.user_id, v_category,
+    -- Gültigkeit ab dem TERMIN-Datum (nicht ab dem Storno-Zeitpunkt): ein Monat
+    -- ab dem stornierten Termin, gültig bis zum Ende dieses Tages (Europe/Berlin).
+    ((v_appt.date + INTERVAL '1 month' + INTERVAL '1 day') AT TIME ZONE 'Europe/Berlin'),
+    p_appointment_id,
     CASE WHEN v_appt.is_makeup THEN v_appt.makeup_count + 1 ELSE 0 END
   )
   RETURNING * INTO v_token;
