@@ -452,3 +452,19 @@ entrypoint = "./functions/send-reminders/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/send-reminders/*.html" ]
+
+[functions.create-customer]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/create-customer/index.ts"
+
+[functions.delete-trainer]
+enabled = true
+# Selbst-Autorisierung im Handler (prüft Admin-Rolle); muss false bleiben.
+verify_jwt = false
+entrypoint = "./functions/delete-trainer/index.ts"
+
+[functions.notify-location-change]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/notify-location-change/index.ts"
