@@ -1,9 +1,9 @@
 import { supabase } from '../lib/supabase';
 
-const SELECT = 'id, date, time, status, program, user_id, trainer_id, session_birth_year, session_level, attended, is_makeup, makeup_count, location, created_at';
+const SELECT = 'id, date, time, status, program, player_id, trainer_id, session_birth_year, session_level, attended, is_makeup, makeup_count, location, created_at';
 
 export type AppointmentInsert = {
-  user_id: string;
+  player_id: string;
   date: string;
   time: string;
   status: 'confirmed' | 'cancelled';
@@ -17,6 +17,15 @@ export type AppointmentInsert = {
 export const AppointmentService = {
   fetchAll: () =>
     supabase.from('appointments').select(SELECT).order('date', { ascending: true }),
+
+  // Termine genau eines Spielers (RLS deckt nur eigene Kinder ab; der Filter
+  // grenzt zusaetzlich auf das aktive Kind ein).
+  fetchByPlayer: (playerId: string) =>
+    supabase
+      .from('appointments')
+      .select(SELECT)
+      .eq('player_id', playerId)
+      .order('date', { ascending: true }),
 
   // Admin lädt ALLE Termine über alle Kunden. PostgREST/Supabase deckelt ein
   // SELECT standardmäßig bei 1000 Zeilen — ohne Paging fielen ab dem 1001.
@@ -56,11 +65,11 @@ export const AppointmentService = {
   updateAttended: (id: string, attended: boolean | null) =>
     supabase.from('appointments').update({ attended }).eq('id', id),
 
-  checkDailyConflict: (userId: string, date: string) =>
+  checkDailyConflict: (playerId: string, date: string) =>
     supabase
       .from('appointments')
       .select('id, time')
-      .eq('user_id', userId)
+      .eq('player_id', playerId)
       .eq('date', date)
       .eq('status', 'confirmed'),
 

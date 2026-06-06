@@ -12,6 +12,10 @@ export type CreateCustomerParams = {
   location: string;
   role?: 'customer' | 'trainer';
   trainer_specialty?: TrainerSpecialty;
+  // Modus (b): gesetzt = Geschwister zu bestehendem Elternteil hinzufuegen
+  // (kein neuer Auth-User/Passwort, nur eine weitere players-Zeile).
+  parent_id?: string;
+  level?: string | null;
 };
 
 export const CustomerService = {

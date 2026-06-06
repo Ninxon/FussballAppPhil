@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { PlayerLevel, PlayerType, BookingPermissions, TrainerSchedule, TrainerSpecialty } from '../../types';
 import { AppointmentService } from '../../services/appointmentService';
 import { ProfileService } from '../../services/profileService';
+import { PlayerService } from '../../services/playerService';
 import { TokenService } from '../../services/tokenService';
 import { TrainerScheduleService } from '../../services/trainerScheduleService';
 import { CustomerService, CreateCustomerParams, extractFunctionError } from '../services/customerService';
@@ -9,8 +10,17 @@ import { PROGRAM_CATEGORY, ProgramId } from '../../constants/programs';
 import { canJoinGroupSlot, checkProgramPermission } from '../../utils/bookingRules';
 import { supabase } from '../../lib/supabase';
 
+// Im Eltern-/Spieler-Modell ist eine "Kundenzeile" der Admin-UI genau EIN
+// Spieler (players-Zeile), angereichert um die Kontaktdaten des Elternteils.
+//   id              = players.id  (Schluessel fuer Termine/Tokens/Berechtigungen)
+//   full_name       = players.name (Kind)
+//   customer_number = players.player_number
+//   parent_id       = profiles.id des Elternteils
+//   parent_name     = full_name des Elternteils (Kontextzeile)
+//   email/phone/address = vom Eltern-Profil
 export type CustomerProfile = {
   id: string;
+  parent_id: string;
   full_name: string;
   email: string | null;
   phone: string;
@@ -28,7 +38,7 @@ export type CustomerProfile = {
 
 export type AdminAppointment = {
   id: string;
-  user_id: string;
+  player_id: string;
   date: string;
   time: string;
   status: 'confirmed' | 'cancelled';
@@ -66,14 +76,14 @@ export function useAdminData() {
     setLoading(true);
     setLoadError(null);
     const [
-      { data: profiles, error: profilesErr },
+      { data: playerRows, error: profilesErr },
       { data: appointments, error: apptsErr },
       { data: trainerProfiles },
       { data: allTokens },
       { data: schedules },
       { data: monthlyCounts },
     ] = await Promise.all([
-      ProfileService.fetchAllCustomers(),
+      PlayerService.fetchAllWithParent(),
       AppointmentService.fetchAllDesc(),
       ProfileService.fetchTrainers(),
       TokenService.fetchAllActive(),
@@ -83,16 +93,41 @@ export function useAdminData() {
     if (profilesErr || apptsErr) {
       setLoadError(profilesErr?.message ?? apptsErr?.message ?? 'Fehler beim Laden.');
     }
-    setCustomers((profiles ?? []) as CustomerProfile[]);
+
+    // players-Zeile (+ Eltern) auf die CustomerProfile-Form der Admin-UI mappen.
+    const mapped: CustomerProfile[] = (playerRows ?? []).map((pl: any) => ({
+      id: pl.id,
+      parent_id: pl.parent_id,
+      full_name: pl.name ?? '',
+      email: pl.parent?.email ?? null,
+      phone: pl.parent?.phone ?? '',
+      address: pl.parent?.address ?? null,
+      parent_name: pl.parent?.full_name ?? null,
+      birth_date: pl.birth_date ?? null,
+      location: pl.location ?? null,
+      player_type: pl.player_type ?? null,
+      customer_number: pl.player_number,
+      is_active: pl.is_active,
+      role: 'customer',
+      level: pl.level ?? null,
+      skip_group_age_level_check: pl.skip_group_age_level_check ?? false,
+      can_book_individual: pl.can_book_individual,
+      can_book_gruppe: pl.can_book_gruppe,
+      can_book_athletik: pl.can_book_athletik,
+      can_book_torhueter_individual: pl.can_book_torhueter_individual,
+      can_book_torhueter_gruppe: pl.can_book_torhueter_gruppe,
+    }));
+    setCustomers(mapped);
     setAllAppointments(((appointments ?? []) as AdminAppointment[]).map(fmtTime));
     setTrainers((trainerProfiles ?? []) as TrainerProfile[]);
     setTrainerSchedules(((schedules ?? []) as TrainerSchedule[]).map(fmtTime));
 
+    // Token-Zaehler pro Spieler (player_id = customer.id der Admin-UI).
     const tokenMap: Record<string, { individual: number; gruppe: number }> = {};
-    for (const token of (allTokens ?? []) as { user_id: string; category: string }[]) {
-      if (!tokenMap[token.user_id]) tokenMap[token.user_id] = { individual: 0, gruppe: 0 };
-      if (token.category === 'individual') tokenMap[token.user_id].individual++;
-      else if (token.category === 'gruppe') tokenMap[token.user_id].gruppe++;
+    for (const token of (allTokens ?? []) as { player_id: string; category: string }[]) {
+      if (!tokenMap[token.player_id]) tokenMap[token.player_id] = { individual: 0, gruppe: 0 };
+      if (token.category === 'individual') tokenMap[token.player_id].individual++;
+      else if (token.category === 'gruppe') tokenMap[token.player_id].gruppe++;
     }
     setActiveTokensByCustomer(tokenMap);
 
@@ -132,9 +167,9 @@ export function useAdminData() {
       if (result?.token) {
         setActiveTokensByCustomer(prev => ({
           ...prev,
-          [appt.user_id]: {
-            individual: (prev[appt.user_id]?.individual ?? 0) + (category === 'individual' ? 1 : 0),
-            gruppe: (prev[appt.user_id]?.gruppe ?? 0) + (category === 'gruppe' ? 1 : 0),
+          [appt.player_id]: {
+            individual: (prev[appt.player_id]?.individual ?? 0) + (category === 'individual' ? 1 : 0),
+            gruppe: (prev[appt.player_id]?.gruppe ?? 0) + (category === 'gruppe' ? 1 : 0),
           },
         }));
       }
@@ -255,7 +290,7 @@ export function useAdminData() {
       : null;
 
     return AppointmentService.insert({
-      user_id: userId, date, time, status: 'confirmed', program,
+      player_id: userId, date, time, status: 'confirmed', program,
       ...(trainerId ? { trainer_id: trainerId } : {}),
       ...(birthYear ? { session_birth_year: birthYear } : {}),
       ...(level ? { session_level: level } : {}),
@@ -337,15 +372,14 @@ export function useAdminData() {
     }
   };
 
+  // Loescht genau diesen Spieler (players-Zeile). Cascade entfernt dessen Termine
+  // + Tokens; Eltern-Account und Geschwister bleiben bestehen (kein Auth-Delete).
   const deleteCustomer = async (customerId: string): Promise<{ error: string | null }> => {
     try {
-      const { data, error } = await CustomerService.delete(customerId);
-      if (error) {
-        return { error: await extractFunctionError(error) };
-      }
-      if (data?.error) return { error: data.error as string };
+      const { error } = await PlayerService.remove(customerId);
+      if (error) return { error: error.message ?? 'Fehler beim Löschen.' };
       setCustomers(prev => prev.filter(c => c.id !== customerId));
-      setAllAppointments(prev => prev.filter(a => a.user_id !== customerId));
+      setAllAppointments(prev => prev.filter(a => a.player_id !== customerId));
       return { error: null };
     } catch (e: any) {
       return { error: e?.message ?? String(e) };
@@ -353,60 +387,85 @@ export function useAdminData() {
   };
 
   const saveCustomerLevel = async (customerId: string, level: PlayerLevel | null) => {
-    const { error } = await ProfileService.update(customerId, { level });
+    const { error } = await PlayerService.update(customerId, { level });
     if (!error) setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, level } : c));
     return { error };
   };
 
   const saveBookingPermissions = async (customerId: string, permissions: Partial<BookingPermissions>) => {
-    const { error } = await ProfileService.update(customerId, permissions as Record<string, unknown>);
+    const { error } = await PlayerService.update(customerId, permissions as Record<string, unknown>);
     if (!error) setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, ...permissions } : c));
     return { error };
   };
 
   // Langfristige Befreiung eines Spielers von der Gruppen-Alters-/Level-Prüfung
-  // (greift nur im Admin-Buchungspfad; per RLS + Guard-Trigger admin-only).
+  // (greift nur im Admin-Buchungspfad; per RLS admin-only).
   const saveGroupCompatExempt = async (customerId: string, value: boolean) => {
-    const { error } = await ProfileService.update(customerId, { skip_group_age_level_check: value });
+    const { error } = await PlayerService.update(customerId, { skip_group_age_level_check: value });
     if (!error) setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, skip_group_age_level_check: value } : c));
     return { error };
   };
 
+  // Spielerfelder gehen auf die players-Zeile, Eltern-Kontakt auf das Eltern-Profil.
   const saveCustomerProfile = async (
     customerId: string,
     fields: Partial<Pick<CustomerProfile, 'full_name' | 'player_type' | 'parent_name' | 'location' | 'birth_date' | 'phone' | 'address'>>,
   ) => {
-    const { error } = await ProfileService.update(customerId, fields as Record<string, unknown>);
-    if (!error) setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, ...fields } : c));
-    return { error };
+    const customer = customers.find(c => c.id === customerId);
+
+    const playerFields: Record<string, unknown> = {};
+    if ('full_name' in fields)   playerFields.name = fields.full_name;
+    if ('player_type' in fields) playerFields.player_type = fields.player_type;
+    if ('location' in fields)    playerFields.location = fields.location;
+    if ('birth_date' in fields)  playerFields.birth_date = fields.birth_date;
+
+    const parentFields: Record<string, unknown> = {};
+    if ('parent_name' in fields) parentFields.full_name = fields.parent_name;
+    if ('phone' in fields)       parentFields.phone = fields.phone;
+    if ('address' in fields)     parentFields.address = fields.address;
+
+    if (Object.keys(playerFields).length > 0) {
+      const { error } = await PlayerService.update(customerId, playerFields);
+      if (error) return { error };
+    }
+    if (Object.keys(parentFields).length > 0 && customer?.parent_id) {
+      const { error } = await ProfileService.update(customer.parent_id, parentFields);
+      if (error) return { error };
+    }
+    setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, ...fields } : c));
+    return { error: null };
   };
 
   // E-Mail-Änderung muss den Auth-User mitziehen (sonst Login-Desync) — daher
   // über die Edge Function, die mit Service-Role auth.users + profiles aktualisiert.
+  // E-Mail haengt am Eltern-Account: ueber parent_id aktualisieren und bei allen
+  // Geschwistern (gleiche parent_id) im lokalen State nachziehen.
   const saveCustomerEmail = async (customerId: string, email: string): Promise<{ error: { message: string } | null }> => {
+    const customer = customers.find(c => c.id === customerId);
+    const parentId = customer?.parent_id ?? customerId;
     try {
       const { data, error } = await supabase.functions.invoke('update-customer-email', {
-        body: { customerId, email },
+        body: { customerId: parentId, email },
       });
       if (error) return { error: { message: await extractFunctionError(error) } };
       if (data?.error) return { error: { message: data.error as string } };
-      setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, email } : c));
+      setCustomers(prev => prev.map(c => c.parent_id === parentId ? { ...c, email } : c));
       return { error: null };
     } catch (e: any) {
       return { error: { message: e?.message ?? String(e) } };
     }
   };
 
-  // Aktiv/Inaktiv ist reines Label + Filterkriterium — blockiert kein Login/keine Buchung.
+  // Aktiv/Inaktiv des Spielers (players.is_active). Reines Label + Filterkriterium.
   const toggleCustomerActive = async (customerId: string, isActive: boolean) => {
-    const { error } = await ProfileService.update(customerId, { is_active: isActive });
+    const { error } = await PlayerService.setActive(customerId, isActive);
     if (!error) setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, is_active: isActive } : c));
     return { error };
   };
 
-  // Setzt die aktiven (unbenutzten) Stornierungstokens eines Kunden zurück (Zähler auf 0).
+  // Setzt die aktiven (unbenutzten) Stornierungstokens eines Spielers zurück (Zähler auf 0).
   const resetCustomerTokens = async (customerId: string) => {
-    const { error } = await TokenService.deleteActiveForUser(customerId);
+    const { error } = await TokenService.deleteActiveForPlayer(customerId);
     if (!error) {
       setActiveTokensByCustomer(prev => ({ ...prev, [customerId]: { individual: 0, gruppe: 0 } }));
     }

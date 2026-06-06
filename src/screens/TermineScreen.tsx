@@ -21,6 +21,7 @@ interface Props {
   cancelAppointment: (id: string, skipToken?: boolean) => Promise<{ error: any }>;
   activeTokens: CancellationToken[];
   setTab: (t: Tab) => void;
+  header?: React.ReactNode;
 }
 
 const PROGRAM_COLORS: Record<string, string> = {
@@ -339,7 +340,7 @@ function ApptCard({ appt, onCancel }: { appt: Appointment; onCancel: (id: string
   );
 }
 
-export function TermineScreen({ appointments, cancelAppointment, activeTokens, setTab }: Props) {
+export function TermineScreen({ appointments, cancelAppointment, activeTokens, setTab, header }: Props) {
   const { C } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
   const insets = useSafeAreaInsets();
@@ -389,6 +390,7 @@ export function TermineScreen({ appointments, cancelAppointment, activeTokens, s
       showsVerticalScrollIndicator={false}
     >
       <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        {header}
         <Text style={styles.screenTitle}>Meine Termine</Text>
 
         {activeTokens.length > 0 && (

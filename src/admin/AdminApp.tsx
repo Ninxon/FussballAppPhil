@@ -121,7 +121,7 @@ export function AdminApp({ onLogout }: Props) {
       {tab === 'kunden' && selectedCustomer && (
         <KundenDetailScreen
           customer={selectedCustomer}
-          appointments={allAppointments.filter(a => a.user_id === selectedCustomer.id)}
+          appointments={allAppointments.filter(a => a.player_id === selectedCustomer.id)}
           trainers={trainers}
           tokenCounts={activeTokensByCustomer[selectedCustomer.id]}
           onBack={() => setSelectedCustomerId(null)}

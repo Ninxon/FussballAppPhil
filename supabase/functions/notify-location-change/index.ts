@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
     const today = new Date().toISOString().slice(0, 10);
     const { data: appointments, error: loadError } = await serviceClient
       .from('appointments')
-      .select('id, user_id, date, time, program, location')
+      .select('id, player_id, date, time, program, location')
       .eq('trainer_id', trainer_id)
       .eq('status', 'confirmed')
       .eq('location', new_location)
@@ -95,19 +95,24 @@ Deno.serve(async (req) => {
 
     if (matching.length === 0) return json({ ok: true, notified: 0 });
 
-    const userIds = [...new Set(matching.map((a: { user_id: string }) => a.user_id))];
-    const { data: profiles } = await serviceClient
-      .from('profiles').select('id, full_name').in('id', userIds);
-    const profilesMap = new Map((profiles ?? []).map((p: { id: string; full_name: string }) => [p.id, p]));
+    // Spieler -> Eltern-Account: Empfaenger ist der Elternteil, Anrede mit Kind-Name.
+    const playerIds = [...new Set(matching.map((a: { player_id: string }) => a.player_id))];
+    const { data: players } = await serviceClient
+      .from('players').select('id, parent_id, name').in('id', playerIds);
+    const playersMap = new Map(
+      (players ?? []).map((p: { id: string; parent_id: string; name: string }) => [p.id, p]),
+    );
 
     let notified = 0;
     for (const appt of matching) {
-      const { data: userData } = await serviceClient.auth.admin.getUserById(appt.user_id);
+      const player = playersMap.get(appt.player_id) as { parent_id?: string; name?: string } | undefined;
+      if (!player?.parent_id) continue;
+
+      const { data: userData } = await serviceClient.auth.admin.getUserById(player.parent_id);
       const email = userData?.user?.email;
       if (!email) continue;
 
-      const profile = profilesMap.get(appt.user_id) as { full_name?: string } | undefined;
-      const name = (profile?.full_name ?? '').replace(/[<>]/g, '').slice(0, 100);
+      const name = (player.name ?? '').replace(/[<>]/g, '').slice(0, 100);
       const programName = PROGRAM_NAMES[appt.program] ?? 'Training';
       const safeTime = String(appt.time ?? '').replace(/[^0-9:]/g, '').slice(0, 5);
       const safeDate = formatDate(String(appt.date ?? '').replace(/[^0-9-]/g, ''));

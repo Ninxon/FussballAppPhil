@@ -2,27 +2,26 @@ import React from 'react';
 import { renderHook, act } from '@testing-library/react-native';
 import { useAppointments } from '../hooks/useAppointments';
 import { supabase } from '../lib/supabase';
-import type { Profile } from '../hooks/useProfile';
+import type { Player } from '../types';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const mockUnsubscribe = jest.fn();
 
-const SESSION = { user: { id: 'user-1', email: 'max@example.com' } };
+const SESSION = { user: { id: 'parent-1', email: 'max@example.com' } };
 
-const baseProfile: Profile = {
-  full_name: 'Max Mustermann',
-  phone: '0170123',
-  customer_number: 101,
-  is_active: true,
-  email: 'max@example.com',
+// Aktives Kind: id = player_id (= Schluessel fuer Termine/Tokens/Realtime).
+const basePlayer: Player = {
+  id: 'user-1',
+  parent_id: 'parent-1',
+  name: 'Max Mustermann',
   birth_date: '2000-01-01',
-  address: null,
-  parent_name: null,
-  location: 'München',
-  player_type: 'feldspieler',
-  role: 'customer',
   level: 'amateur',
+  player_type: 'feldspieler',
+  location: 'Rüsselsheim',
+  player_number: 101,
+  is_active: true,
+  skip_group_age_level_check: false,
   can_book_individual: true,
   can_book_gruppe: true,
   can_book_athletik: false,
@@ -32,7 +31,7 @@ const baseProfile: Profile = {
 
 const confirmedAppt = (overrides: Record<string, unknown> = {}) => ({
   id: 'appt-1',
-  user_id: 'user-1',
+  player_id: 'user-1',
   date: '2099-07-01',
   time: '10:00',
   status: 'confirmed' as const,
@@ -43,7 +42,7 @@ const confirmedAppt = (overrides: Record<string, unknown> = {}) => ({
 
 const validToken = (overrides: Record<string, unknown> = {}) => ({
   id: 'tok-1',
-  user_id: 'user-1',
+  player_id: 'user-1',
   category: 'individual',
   issued_at: '2024-06-01T00:00:00Z',
   expires_at: '2099-12-31T00:00:00Z',
@@ -100,7 +99,7 @@ function makeRealtimeCapture() {
 async function loadHookWithState(
   appointments: any[],
   tokens: any[],
-  profile: Profile = baseProfile,
+  player: Player = basePlayer,
 ) {
   (supabase.from as jest.Mock).mockImplementation((table: string) => {
     if (table === 'appointments') {
@@ -114,7 +113,7 @@ async function loadHookWithState(
   });
 
   const triggerAuth = captureAuthCallback();
-  const hook = renderHook(() => useAppointments(profile));
+  const hook = renderHook(() => useAppointments(player));
 
   await act(async () => {
     triggerAuth('INITIAL_SESSION', SESSION);
@@ -184,7 +183,7 @@ describe('addAppointment — Fehlerfälle', () => {
 
   it('Buchungsberechtigung für Programm fehlt → Fehler ohne RPC-Aufruf', async () => {
     const token = validToken();
-    const restricted = { ...baseProfile, can_book_individual: false };
+    const restricted = { ...basePlayer, can_book_individual: false };
     const { result } = await loadHookWithState([], [token], restricted);
 
     let r: any;
@@ -230,14 +229,15 @@ describe('addAppointment — Fehlerfälle', () => {
     expect(r.error).toBeNull();
   });
 
-  it('keine Session → Fehler ohne RPC-Aufruf', async () => {
+  it('kein aktives Kind → Fehler ohne RPC-Aufruf', async () => {
     (supabase.auth as any).getSession = jest.fn().mockResolvedValue({ data: { session: null } });
     const { result } = renderHook(() => useAppointments(null));
 
     let r: any;
     await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'individual'); });
 
-    expect(r.error?.message).toMatch(/eingeloggt/);
+    expect(r.error?.message).toMatch(/Spieler/);
+    expect(supabase.rpc).not.toHaveBeenCalled();
   });
 
   it('DB-RPC gibt Netzwerkfehler zurück → Fehler', async () => {
@@ -320,6 +320,7 @@ describe('addAppointment — Erfolgspfad', () => {
     await act(async () => { await result.current.addAppointment('2099-07-01', '10:00', 'individual'); });
 
     expect(supabase.rpc).toHaveBeenCalledWith('book_with_token', {
+      p_player_id: 'user-1',
       p_token_id: 'tok-spec',
       p_date: '2099-07-01',
       p_time: '10:00',
@@ -360,7 +361,7 @@ describe('addAppointment — Erfolgspfad', () => {
     });
 
     const gruppeToken = validToken({ id: 'tok-g', category: 'gruppe' });
-    const athletikProfile = { ...baseProfile, can_book_athletik: true };
+    const athletikProfile = { ...basePlayer, can_book_athletik: true };
     const { result } = await loadHookWithState([], [gruppeToken], athletikProfile);
 
     let r: any;
@@ -431,7 +432,7 @@ describe('addAppointment — Race Condition Guard', () => {
       handlers['INSERT']?.({
         new: {
           id: 'other-appt',
-          user_id: 'other-user',
+          player_id: 'other-user',
           date: '2099-07-01',
           time: '10:00',
           program: 'gruppe',
@@ -702,8 +703,8 @@ describe('cancelAppointment — Race Condition Guard', () => {
     // Fremder User storniert seinen Termin
     await act(async () => {
       handlers['UPDATE']?.({
-        new: { id: 'other-appt', user_id: 'other-user', date: '2099-07-01', time: '10:00', program: 'gruppe', status: 'cancelled' },
-        old: { id: 'other-appt', user_id: 'other-user', date: '2099-07-01', time: '10:00', program: 'gruppe', status: 'confirmed' },
+        new: { id: 'other-appt', player_id: 'other-user', date: '2099-07-01', time: '10:00', program: 'gruppe', status: 'cancelled' },
+        old: { id: 'other-appt', player_id: 'other-user', date: '2099-07-01', time: '10:00', program: 'gruppe', status: 'confirmed' },
       });
     });
 
@@ -759,7 +760,7 @@ describe('useAppointments — Datenladen', () => {
     const { result } = await loadHookWithState([appt], []);
 
     expect(result.current.myAppointments).toHaveLength(1);
-    expect(result.current.myAppointments[0].user_id).toBe('user-1');
+    expect(result.current.myAppointments[0].player_id).toBe('user-1');
   });
 });
 

@@ -11,9 +11,11 @@ import { Btn } from '../components/Btn';
 import { useProfile } from '../hooks/useProfile';
 import { supabase } from '../lib/supabase';
 import { STUDIO } from '../constants/studio';
+import { Player } from '../types';
 
 interface Props {
   onLogout: () => void;
+  players: Player[];
 }
 
 function InfoRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
@@ -56,7 +58,7 @@ function fmtDate(iso: string) {
   return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-export function ProfilScreen({ onLogout }: Props) {
+export function ProfilScreen({ onLogout, players }: Props) {
   const insets = useSafeAreaInsets();
   const { C, isDark, toggleTheme } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
@@ -131,7 +133,6 @@ export function ProfilScreen({ onLogout }: Props) {
     setContactLoading(false);
   };
 
-  const playerTypeLabel = profile?.player_type === 'torwart' ? 'Torwart' : profile?.player_type === 'feldspieler' ? 'Feldspieler' : '—';
   const initials = profile?.full_name
     ? profile.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
     : '?';
@@ -152,23 +153,33 @@ export function ProfilScreen({ onLogout }: Props) {
             <Text style={styles.avatarIcon}>{loading ? '' : initials}</Text>
           </View>
           <Text style={styles.userName}>{loading ? '…' : (profile?.full_name ?? '—')}</Text>
-          <Text style={styles.userType}>{playerTypeLabel}</Text>
+          <Text style={styles.userType}>Elternaccount</Text>
           <View style={styles.userChips}>
-            {profile?.birth_date && (
-              <View style={styles.chip}>
-                <Text style={styles.chipText}>{calcAge(profile.birth_date)}</Text>
-              </View>
-            )}
-            {profile?.location && (
-              <View style={styles.chip}>
-                <Text style={styles.chipText}>{profile.location}</Text>
-              </View>
-            )}
             <View style={styles.chip}>
               <Text style={styles.chipText}>Nr. {profile?.customer_number ?? '—'}</Text>
             </View>
+            <View style={styles.chip}>
+              <Text style={styles.chipText}>{players.length === 1 ? '1 Spieler' : `${players.length} Spieler`}</Text>
+            </View>
           </View>
         </View>
+
+        {/* Spieler (read-only) */}
+        {players.length > 0 && (
+          <SectionCard title="Spieler">
+            {players.map((pl, i) => (
+              <InfoRow
+                key={pl.id}
+                label={pl.name}
+                value={[
+                  pl.player_number ? `Nr. ${pl.player_number}` : '',
+                  pl.birth_date ? calcAge(pl.birth_date) : '',
+                ].filter(Boolean).join(' · ')}
+                last={i === players.length - 1}
+              />
+            ))}
+          </SectionCard>
+        )}
 
         {/* Erreichbarkeit */}
         <SectionCard title="Erreichbarkeit">

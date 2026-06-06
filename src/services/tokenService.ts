@@ -1,18 +1,18 @@
 import { supabase } from '../lib/supabase';
 
 export type TokenInsert = {
-  user_id: string;
+  player_id: string;
   category: string;
   expires_at: string;
   source_appointment_id: string;
 };
 
 export const TokenService = {
-  fetchActive: (userId: string) =>
+  fetchActive: (playerId: string) =>
     supabase
       .from('cancellation_tokens')
       .select('*')
-      .eq('user_id', userId)
+      .eq('player_id', playerId)
       .is('used_at', null)
       .gt('expires_at', new Date().toISOString()),
 
@@ -28,15 +28,15 @@ export const TokenService = {
   fetchAllActive: () =>
     supabase
       .from('cancellation_tokens')
-      .select('user_id, category')
+      .select('player_id, category')
       .is('used_at', null)
       .gt('expires_at', new Date().toISOString()),
 
-  // Löscht alle unbenutzten Tokens eines Kunden (Admin-Reset). RLS: nur Admin.
-  deleteActiveForUser: (userId: string) =>
+  // Löscht alle unbenutzten Tokens eines Spielers (Admin-Reset). RLS: nur Admin.
+  deleteActiveForPlayer: (playerId: string) =>
     supabase
       .from('cancellation_tokens')
       .delete()
-      .eq('user_id', userId)
+      .eq('player_id', playerId)
       .is('used_at', null),
 };

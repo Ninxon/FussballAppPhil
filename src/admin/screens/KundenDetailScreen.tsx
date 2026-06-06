@@ -372,7 +372,7 @@ export function KundenDetailScreen({
         <View style={styles.deleteConfirmBox}>
           <Text style={styles.deleteConfirmTitle}>Spieler unwiderruflich löschen?</Text>
           <Text style={styles.deleteConfirmSub}>
-            Alle Daten von <Text style={{ fontWeight: '700' }}>{customer.full_name}</Text> werden dauerhaft gelöscht.
+            <Text style={{ fontWeight: '700' }}>{customer.full_name}</Text> und alle zugehörigen Termine werden dauerhaft gelöscht. Der Eltern-Account und etwaige Geschwister bleiben bestehen.
           </Text>
           {deleteError && <Text style={styles.deleteError}>{deleteError}</Text>}
           <View style={styles.deleteConfirmBtns}>

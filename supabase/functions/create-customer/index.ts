@@ -53,7 +53,37 @@ Deno.serve(async (req) => {
       return json({ error: 'Nur Admins dürfen Kunden anlegen' }, 403);
     }
 
-    const { email, full_name, phone, birth_date, address, parent_name, player_type, location, role, trainer_specialty } = await req.json();
+    const { email, full_name, phone, birth_date, address, parent_name, player_type, location, role, trainer_specialty, parent_id, level } = await req.json();
+
+    // ── Modus (b): Geschwister zu bestehendem Elternteil hinzufuegen ────────
+    // Kein neuer Auth-User/Passwort — nur eine weitere players-Zeile.
+    if (role !== 'trainer' && parent_id) {
+      if (!full_name?.trim()) return json({ error: 'Name ist ein Pflichtfeld' }, 400);
+
+      const { data: parent } = await serviceClient
+        .from('profiles').select('id, role').eq('id', parent_id).single();
+      if (!parent || parent.role !== 'customer') {
+        return json({ error: 'Elternteil nicht gefunden' }, 400);
+      }
+
+      const { data: sibling, error: siblingError } = await serviceClient
+        .from('players')
+        .insert({
+          parent_id,
+          name: full_name.trim(),
+          birth_date: birth_date?.trim() || null,
+          player_type: player_type || null,
+          location: location?.trim() || null,
+          level: level || null,
+          is_active: true,
+        })
+        .select('player_number')
+        .single();
+      if (siblingError) return json({ error: siblingError.message }, 500);
+
+      return json({ customer_number: sibling.player_number, player_number: sibling.player_number });
+    }
+
     if (!email?.trim() || !full_name?.trim()) {
       return json({ error: 'E-Mail und Name sind Pflichtfelder' }, 400);
     }
@@ -86,19 +116,22 @@ Deno.serve(async (req) => {
       return json({ error: authError?.message ?? 'Fehler beim Anlegen des Nutzers' }, 500);
     }
 
-    // Profil anlegen (Trigger vergibt Kundennummer automatisch)
+    // Profil anlegen. Beim Eltern-Account ist full_name der Elternteil
+    // (parent_name bevorzugt, sonst der eingegebene Name); spielerspezifische
+    // Felder (birth_date/player_type/location/level) leben auf players.
+    const parentFullName = accountRole === 'customer'
+      ? (parent_name?.trim() || full_name.trim())
+      : full_name.trim();
+
     const { data: profile, error: profileError } = await serviceClient
       .from('profiles')
       .insert({
         id: authData.user.id,
-        full_name: full_name.trim(),
+        full_name: parentFullName,
         email: email.trim(),
         phone: phone?.trim() || null,
-        birth_date: birth_date?.trim() || null,
         address: address?.trim() || null,
         parent_name: parent_name?.trim() || null,
-        player_type: player_type || null,
-        location: location?.trim() || null,
         role: accountRole,
         is_active: true,
         ...(accountRole === 'trainer' && trainer_specialty ? { trainer_specialty } : {}),
@@ -112,7 +145,30 @@ Deno.serve(async (req) => {
       return json({ error: profileError.message }, 500);
     }
 
-    return json({ temp_password: tempPassword, customer_number: profile.customer_number });
+    // Eltern-Account: erste players-Zeile (das Kind) anlegen.
+    let resultNumber: number | null = profile.customer_number;
+    if (accountRole === 'customer') {
+      const { data: firstPlayer, error: playerError } = await serviceClient
+        .from('players')
+        .insert({
+          parent_id: authData.user.id,
+          name: full_name.trim(),
+          birth_date: birth_date?.trim() || null,
+          player_type: player_type || null,
+          location: location?.trim() || null,
+          level: level || null,
+          is_active: true,
+        })
+        .select('player_number')
+        .single();
+      if (playerError) {
+        await serviceClient.auth.admin.deleteUser(authData.user.id);
+        return json({ error: playerError.message }, 500);
+      }
+      resultNumber = firstPlayer.player_number;
+    }
+
+    return json({ temp_password: tempPassword, customer_number: resultNumber, player_number: resultNumber });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     return json({ error: msg }, 500);

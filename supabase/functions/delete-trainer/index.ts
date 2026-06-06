@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     // 1. Alle bestätigten Termine dieses Trainers laden
     const { data: appointments, error: loadError } = await serviceClient
       .from('appointments')
-      .select('id, user_id, program, is_makeup, makeup_count')
+      .select('id, player_id, program, is_makeup, makeup_count')
       .eq('trainer_id', trainer_id)
       .eq('status', 'confirmed');
     if (loadError) return json({ error: `Termine laden fehlgeschlagen: ${loadError.message}` }, 500);
@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
       //    der Kette fortführen, damit das Storno-Limit erhalten bleibt.
       const { error: tokenError } = await serviceClient.from('cancellation_tokens').insert(
         appointments.map((a: any) => ({
-          user_id: a.user_id,
+          player_id: a.player_id,
           category: PROGRAM_CATEGORY[a.program] ?? 'individual',
           expires_at: expiresAt.toISOString(),
           source_appointment_id: a.id,

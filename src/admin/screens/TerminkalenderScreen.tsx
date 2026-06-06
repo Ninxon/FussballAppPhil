@@ -384,7 +384,7 @@ export function TerminkalenderScreen({
     const colW    = Math.max(150, Math.floor(availW / numCols));
 
     const selAppt   = selectedApptId ? dayAppts.find(a => a.id === selectedApptId) : null;
-    const selCust   = selAppt ? customers.find(c => c.id === selAppt.user_id) : null;
+    const selCust   = selAppt ? customers.find(c => c.id === selAppt.player_id) : null;
     const selProg   = selAppt ? PROGRAMS.find(p => p.id === selAppt.program) : null;
     const selTrainer= selAppt?.trainer_id ? trainers.find(t => t.id === selAppt.trainer_id) : null;
     const selColor  = selAppt ? (PROGRAM_COLORS[selAppt.program] ?? C.accent) : C.accent;
@@ -454,7 +454,7 @@ export function TerminkalenderScreen({
                         return (
                           <View key={t.id} style={[dg.cell, { width: colW }]}>
                             {cellAppts.map(a => {
-                              const cust  = customers.find(c => c.id === a.user_id);
+                              const cust  = customers.find(c => c.id === a.player_id);
                               const color = PROGRAM_COLORS[a.program] ?? C.accent;
                               const bg    = PROGRAM_BG[a.program]    ?? C.accentLight;
                               const isSel = selectedApptId === a.id;
@@ -670,7 +670,7 @@ export function TerminkalenderScreen({
                               <Text style={[wg.apptMeta, isSel && wg.apptMetaSel]} numberOfLines={1}>
                                 {isGrp
                                   ? `${appts.length}/${cap} Teiln.`
-                                  : (customers.find(c => c.id === first.user_id)?.full_name ?? '—')}
+                                  : (customers.find(c => c.id === first.player_id)?.full_name ?? '—')}
                               </Text>
                               {trainer && (
                                 <Text style={[wg.apptTrainer, isSel && wg.apptTrainerSel]} numberOfLines={1}>
@@ -720,7 +720,7 @@ export function TerminkalenderScreen({
                     />
                     <View style={s.participantList}>
                       {expandedDetail.map(a => {
-                        const cust   = customers.find(c => c.id === a.user_id);
+                        const cust   = customers.find(c => c.id === a.player_id);
                         const isThis = selectedApptId === a.id;
                         return (
                           <View key={a.id} style={s.participantRow}>
@@ -742,7 +742,7 @@ export function TerminkalenderScreen({
                   </>
                 ) : (
                   <View>
-                    <Text style={s.detailName}>{customers.find(c => c.id === first.user_id)?.full_name ?? '—'}</Text>
+                    <Text style={s.detailName}>{customers.find(c => c.id === first.player_id)?.full_name ?? '—'}</Text>
                     <TextInput
                       style={s.cancelReasonInput}
                       value={cancelReason}

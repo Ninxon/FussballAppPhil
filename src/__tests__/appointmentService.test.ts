@@ -69,7 +69,7 @@ describe('AppointmentService.fetchAllDesc', () => {
 
 describe('AppointmentService.insert', () => {
   it('calls insert and select and single', () => {
-    const data = { user_id: 'u1', date: '2024-06-01', time: '10:00', status: 'confirmed' as const, program: 'individual' };
+    const data = { player_id: 'p1', date: '2024-06-01', time: '10:00', status: 'confirmed' as const, program: 'individual' };
     AppointmentService.insert(data);
     expect(mockChain.insert).toHaveBeenCalledWith(data);
     expect(mockChain.select).toHaveBeenCalled();
@@ -104,9 +104,9 @@ describe('AppointmentService.updateAttended', () => {
 });
 
 describe('AppointmentService.checkDailyConflict', () => {
-  it('filters by user_id, date and confirmed status', () => {
-    AppointmentService.checkDailyConflict('user-1', '2024-06-01');
-    expect(mockChain.eq).toHaveBeenCalledWith('user_id', 'user-1');
+  it('filters by player_id, date and confirmed status', () => {
+    AppointmentService.checkDailyConflict('player-1', '2024-06-01');
+    expect(mockChain.eq).toHaveBeenCalledWith('player_id', 'player-1');
     expect(mockChain.eq).toHaveBeenCalledWith('date', '2024-06-01');
     expect(mockChain.eq).toHaveBeenCalledWith('status', 'confirmed');
   });

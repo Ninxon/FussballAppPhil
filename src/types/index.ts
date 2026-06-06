@@ -6,7 +6,7 @@ export type Appointment = {
   time: string;
   status: AppointmentStatus;
   program: string;
-  user_id?: string;
+  player_id?: string;
   trainer_id?: string | null;
   session_level?: string | null;
   session_birth_year?: number | null;
@@ -32,6 +32,27 @@ export type TrainerSchedule = {
 export type PlayerLevel = 'anfaenger' | 'amateur' | 'profi' | 'experte';
 export type PlayerType = 'torwart' | 'feldspieler';
 
+// Ein Spieler (Kind) gehoert zu einem Eltern-Account (parent_id -> profiles.id).
+// Level, Typ, Buchungsberechtigungen und Standort haengen pro Spieler.
+export type Player = {
+  id: string;
+  parent_id: string;
+  name: string;
+  birth_date?: string | null;
+  level?: PlayerLevel | null;
+  player_type?: PlayerType | null;
+  can_book_individual: boolean;
+  can_book_gruppe: boolean;
+  can_book_athletik: boolean;
+  can_book_torhueter_individual: boolean;
+  can_book_torhueter_gruppe: boolean;
+  skip_group_age_level_check: boolean;
+  location?: 'Rüsselsheim' | 'Kelsterbach' | null;
+  player_number?: number | null;
+  is_active: boolean;
+  created_at?: string;
+};
+
 export const LEVEL_COLORS: Record<PlayerLevel, string> = {
   anfaenger: '#4CAF50',
   amateur:   '#FFC107',
@@ -50,7 +71,7 @@ export type ProgramCategory = 'individual' | 'gruppe';
 
 export type CancellationToken = {
   id: string;
-  user_id: string;
+  player_id: string;
   category: ProgramCategory;
   issued_at: string;
   expires_at: string;

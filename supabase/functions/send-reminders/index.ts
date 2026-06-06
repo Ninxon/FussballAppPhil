@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
   // Nur Termine, für die noch keine Erinnerung verschickt wurde (Idempotenz).
   const { data: appointments, error: fetchError } = await supabase
     .from('appointments')
-    .select('id, user_id, date, time, program, location')
+    .select('id, player_id, date, time, program, location')
     .eq('date', tomorrowStr)
     .eq('status', 'confirmed')
     .is('reminder_sent_at', null);
@@ -66,17 +66,26 @@ Deno.serve(async (req) => {
   for (const appt of appointments) {
     // Eine Mail darf nicht den ganzen Batch abbrechen: pro Termin isolieren.
     try {
-      const { data: { user } } = await supabase.auth.admin.getUserById(appt.user_id);
-      if (!user?.email) {
-        console.warn(`[send-reminders] no email for user ${appt.user_id}, skipping appt ${appt.id}`);
+      // Spieler -> Eltern-Account: E-Mail geht an den Elternteil, im Text steht
+      // der Name des Kindes.
+      const { data: player } = await supabase
+        .from('players')
+        .select('parent_id, name')
+        .eq('id', appt.player_id)
+        .single();
+
+      if (!player?.parent_id) {
+        console.warn(`[send-reminders] no player/parent for ${appt.player_id}, skipping appt ${appt.id}`);
         continue;
       }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', appt.user_id)
-        .single();
+      const { data: { user } } = await supabase.auth.admin.getUserById(player.parent_id);
+      if (!user?.email) {
+        console.warn(`[send-reminders] no email for parent ${player.parent_id}, skipping appt ${appt.id}`);
+        continue;
+      }
+
+      const profile = { full_name: player.name };
 
       const programName = PROGRAM_NAMES[appt.program] ?? 'Training';
       const dateParts = (appt.date as string).split('-');

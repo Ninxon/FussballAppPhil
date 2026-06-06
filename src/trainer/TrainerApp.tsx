@@ -24,7 +24,7 @@ type TrainerAppointment = {
   time: string;
   status: string;
   program: string;
-  user_id: string;
+  player_id: string;
 };
 
 type TrainerProfile = {
@@ -59,7 +59,7 @@ export function TrainerApp({ onLogout }: Props) {
       const [{ data: prof }, { data: appts }, { data: vids }] = await Promise.all([
         supabase.from('profiles').select('full_name, email, trainer_specialty').eq('id', user.id).single(),
         supabase.from('appointments')
-          .select('id, date, time, status, program, user_id')
+          .select('id, date, time, status, program, player_id')
           .eq('trainer_id', user.id)
           .eq('status', 'confirmed')
           .gte('date', todayStr())

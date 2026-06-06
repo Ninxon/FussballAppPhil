@@ -10,11 +10,10 @@ import { useTheme } from '../contexts/ThemeContext';
 import { Card } from '../components/Card';
 import { GlassCard } from '../components/GlassCard';
 import { Btn } from '../components/Btn';
-import { Appointment, SlotCount, SlotPlayer, CancellationToken, Tab, TrainerSchedule } from '../types';
+import { Appointment, SlotCount, SlotPlayer, CancellationToken, Tab, TrainerSchedule, Player } from '../types';
 import { todayStr, fmtDate, fmtShort, DE_MONTHS, DE_DAYS_SHORT } from '../constants/i18n';
 import { PROGRAMS, PROGRAM_CATEGORY, CATEGORY_COLORS, ProgramId } from '../constants/programs';
 import { PROGRAM_IMAGES } from '../constants/programImages';
-import { Profile } from '../hooks/useProfile';
 import { germanHolidays, canJoinGroupSlot, reconstructGroups } from '../utils/bookingRules';
 import { LOCATIONS, Location } from '../constants/studio';
 
@@ -24,13 +23,14 @@ interface Props {
   slotCounts: SlotCount[];
   slotPlayers: SlotPlayer[];
   myAppointments: Appointment[];
-  profile: Profile | null;
+  player: Player | null;
   activeTokens: CancellationToken[];
   addAppointment: (date: string, time: string, program: string, location?: Location | null) => Promise<{ error: any }>;
   setTab: (t: Tab) => void;
   trainerSchedules?: TrainerSchedule[];
   trainers?: Array<{ id: string; trainer_specialty?: string | null }>;
   refreshSlotData?: () => Promise<void>;
+  header?: React.ReactNode;
 }
 
 type Step = 'category' | 'program' | 'date' | 'time' | 'confirm' | 'done';
@@ -92,8 +92,8 @@ function FilterChip({ label, active, color, onPress }: { label: string; active: 
 const TORWART_PROGRAMS = new Set(['torhueter_individual', 'torhueter_gruppe']);
 const FELD_PROGRAMS = new Set(['individual', 'gruppe', 'athletik']);
 
-function isProgramAllowed(profile: Profile, programId: string): boolean {
-  const map: Record<string, keyof Profile> = {
+function isProgramAllowed(player: Player, programId: string): boolean {
+  const map: Record<string, keyof Player> = {
     individual: 'can_book_individual',
     gruppe: 'can_book_gruppe',
     athletik: 'can_book_athletik',
@@ -101,13 +101,13 @@ function isProgramAllowed(profile: Profile, programId: string): boolean {
     torhueter_gruppe: 'can_book_torhueter_gruppe',
   };
   const key = map[programId];
-  if (!key || !profile[key]) return false;
-  if (profile.player_type === 'torwart' && !TORWART_PROGRAMS.has(programId)) return false;
-  if (profile.player_type === 'feldspieler' && !FELD_PROGRAMS.has(programId)) return false;
+  if (!key || !player[key]) return false;
+  if (player.player_type === 'torwart' && !TORWART_PROGRAMS.has(programId)) return false;
+  if (player.player_type === 'feldspieler' && !FELD_PROGRAMS.has(programId)) return false;
   return true;
 }
 
-export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile, activeTokens, addAppointment, setTab, trainerSchedules = [], trainers = [], refreshSlotData }: Props) {
+export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, activeTokens, addAppointment, setTab, trainerSchedules = [], trainers = [], refreshSlotData, header }: Props) {
   const insets = useSafeAreaInsets();
   const { C } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
@@ -217,8 +217,8 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
       s.date === selDate && s.time === time && s.program === selProgram &&
       (s.location ?? null) === (location ?? null))?.booked ?? 0;
     const isGroup = selProgram ? PROGRAM_CATEGORY[selProgram] === 'gruppe' : false;
-    const playerBirthYear = profile?.birth_date ? parseInt(profile.birth_date.slice(0, 4)) : null;
-    const playerLevel = profile?.level ?? null;
+    const playerBirthYear = player?.birth_date ? parseInt(player.birth_date.slice(0, 4)) : null;
+    const playerLevel = player?.level ?? null;
     const sessionYear = selDate ? parseInt(selDate.slice(0, 4)) : new Date().getFullYear();
 
     let freeInGroup = GROUP_SIZE;
@@ -253,8 +253,8 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
     return { totalCapacity, booked, isGroup, freeInGroup, groupUnavailable };
   };
 
-  const allowedPrograms = profile
-    ? PROGRAMS.filter(p => isProgramAllowed(profile, p.id))
+  const allowedPrograms = player
+    ? PROGRAMS.filter(p => isProgramAllowed(player, p.id))
     : [];
 
   // ── CategoryStep ──────────────────────────────────────────────
@@ -464,8 +464,8 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
     const nowStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const isToday = selDate === ts;
     const isGroup = selProgram ? PROGRAM_CATEGORY[selProgram] === 'gruppe' : false;
-    const playerBirthYear = profile?.birth_date ? parseInt(profile.birth_date.slice(0, 4)) : null;
-    const playerLevel = profile?.level ?? null;
+    const playerBirthYear = player?.birth_date ? parseInt(player.birth_date.slice(0, 4)) : null;
+    const playerLevel = player?.level ?? null;
 
     const { slotEntries, availableLocations } = slotInfo;
     const visibleEntries = slotEntries.filter(e => locFilter === 'alle' || e.location === locFilter);
@@ -615,6 +615,7 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, profile,
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
+      {step !== 'done' && header}
       {step !== 'done' && (
         <>
           <Text style={styles.bookingLabel}>Nachholtermin buchen</Text>

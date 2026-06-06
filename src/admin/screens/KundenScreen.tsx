@@ -19,6 +19,7 @@ interface Props {
     parent_name: string;
     player_type: PlayerType | null;
     location: string;
+    parent_id?: string;
   }) => Promise<{ error: string | null; tempPassword?: string; customerNumber?: number }>;
 }
 
@@ -34,6 +35,11 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
   const [filterAppt, setFilterAppt] = useState<'all' | 'with' | 'without'>('all');
   const [showForm, setShowForm] = useState(false);
+  // 'new' = neuer Eltern-Account (mit Login), 'sibling' = weiteres Kind zu
+  // bestehendem Elternteil (kein neuer Login).
+  const [formMode, setFormMode] = useState<'new' | 'sibling'>('new');
+  const [parentQuery, setParentQuery] = useState('');
+  const [selectedParentId, setSelectedParentId] = useState<string | null>(null);
   const [formEmail, setFormEmail] = useState('');
   const [formName, setFormName] = useState('');
   const [formParentName, setFormParentName] = useState('');
@@ -44,18 +50,42 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
   const [formLocation, setFormLocation] = useState<Location | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [createdInfo, setCreatedInfo] = useState<{ name: string; email: string; password: string; number: number } | null>(null);
+  const [createdInfo, setCreatedInfo] = useState<{ name: string; email: string; password?: string; number: number } | null>(null);
+
+  // Eindeutige Eltern-Accounts aus der (flachen) Spielerliste ableiten.
+  const parents = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; email: string | null }>();
+    for (const c of customers) {
+      if (c.parent_id && !map.has(c.parent_id)) {
+        map.set(c.parent_id, { id: c.parent_id, name: c.parent_name ?? c.full_name ?? '—', email: c.email });
+      }
+    }
+    return [...map.values()];
+  }, [customers]);
+
+  const parentMatches = useMemo(() => {
+    const q = parentQuery.toLowerCase().trim();
+    if (!q) return parents.slice(0, 6);
+    return parents.filter(p =>
+      p.name.toLowerCase().includes(q) || (p.email ?? '').toLowerCase().includes(q),
+    ).slice(0, 6);
+  }, [parents, parentQuery]);
+
+  const selectedParent = parents.find(p => p.id === selectedParentId) ?? null;
 
   const resetForm = () => {
     setFormEmail(''); setFormName(''); setFormPhone('');
     setFormBirth(''); setFormAddress(''); setFormParentName('');
     setFormPlayerType(null); setFormLocation(null);
+    setFormMode('new'); setParentQuery(''); setSelectedParentId(null);
     setFormError(null); setShowForm(false);
   };
 
   const doCreate = async () => {
     if (!formName.trim()) { setFormError('Name ist ein Pflichtfeld.'); return; }
-    if (!formEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formEmail.trim())) {
+    if (formMode === 'sibling') {
+      if (!selectedParentId) { setFormError('Bitte ein bestehendes Elternteil auswählen.'); return; }
+    } else if (!formEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formEmail.trim())) {
       setFormError('Bitte eine gültige E-Mail-Adresse eingeben.');
       return;
     }
@@ -72,20 +102,27 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
     setFormError(null);
     setFormLoading(true);
     try {
+      const isSibling = formMode === 'sibling';
       const { error, tempPassword, customerNumber } = await onCreateCustomer({
-        email: formEmail.trim(),
+        email: isSibling ? '' : formEmail.trim(),
         full_name: formName.trim(),
-        phone: formPhone.trim(),
+        phone: isSibling ? '' : formPhone.trim(),
         birth_date: formBirth.trim(),
-        address: formAddress.trim(),
-        parent_name: formParentName.trim(),
+        address: isSibling ? '' : formAddress.trim(),
+        parent_name: isSibling ? '' : formParentName.trim(),
         player_type: formPlayerType,
         location: formLocation,
+        ...(isSibling && selectedParentId ? { parent_id: selectedParentId } : {}),
       });
       if (error) {
         setFormError(error);
       } else {
-        setCreatedInfo({ name: formName.trim(), email: formEmail.trim(), password: tempPassword!, number: customerNumber! });
+        setCreatedInfo({
+          name: formName.trim(),
+          email: isSibling ? (selectedParent?.email ?? '') : formEmail.trim(),
+          password: isSibling ? undefined : tempPassword,
+          number: customerNumber!,
+        });
         resetForm();
       }
     } finally {
@@ -103,7 +140,7 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
       const ts = todayStr();
       list = list.filter(c => {
         const hasUpcoming = allAppointments.some(
-          a => a.user_id === c.id && a.status === 'confirmed' && a.date >= ts,
+          a => a.player_id === c.id && a.status === 'confirmed' && a.date >= ts,
         );
         return filterAppt === 'with' ? hasUpcoming : !hasUpcoming;
       });
@@ -134,11 +171,17 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
               <Text style={styles.successClose}>✕</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.successLine}>{createdInfo.name} · {createdInfo.email}</Text>
-          <Text style={styles.successPwLabel}>Temporäres Passwort — bitte dem Kunden mitteilen:</Text>
-          <View style={styles.passwordBox}>
-            <Text style={styles.passwordText} selectable>{createdInfo.password}</Text>
-          </View>
+          <Text style={styles.successLine}>{createdInfo.name}{createdInfo.email ? ` · ${createdInfo.email}` : ''}</Text>
+          {createdInfo.password ? (
+            <>
+              <Text style={styles.successPwLabel}>Temporäres Passwort — bitte dem Kunden mitteilen:</Text>
+              <View style={styles.passwordBox}>
+                <Text style={styles.passwordText} selectable>{createdInfo.password}</Text>
+              </View>
+            </>
+          ) : (
+            <Text style={styles.successLine}>Geschwister-Spieler nutzt den bestehenden Login des Elternteils.</Text>
+          )}
         </View>
       )}
 
@@ -149,6 +192,60 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
       {showForm && (
         <View style={styles.form}>
           <Text style={styles.formTitle}>Neuen Kunden anlegen</Text>
+
+          {/* Modus: neuer Eltern-Account vs. Geschwister zu bestehendem */}
+          <View style={styles.typeRow}>
+            <TouchableOpacity
+              style={[styles.typeChip, formMode === 'new' && styles.typeChipActive]}
+              onPress={() => { setFormMode('new'); setFormError(null); }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.typeChipText, formMode === 'new' && styles.typeChipTextActive]}>Neuer Eltern-Account</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.typeChip, formMode === 'sibling' && styles.typeChipActive]}
+              onPress={() => { setFormMode('sibling'); setFormError(null); }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.typeChipText, formMode === 'sibling' && styles.typeChipTextActive]}>Geschwister hinzufügen</Text>
+            </TouchableOpacity>
+          </View>
+
+          {formMode === 'sibling' && (
+            <>
+              <Text style={styles.fieldLabel}>Bestehendes Elternteil *</Text>
+              {selectedParent ? (
+                <View style={styles.selectedParentBox}>
+                  <Text style={styles.selectedParentName} numberOfLines={1}>
+                    {selectedParent.name}{selectedParent.email ? ` · ${selectedParent.email}` : ''}
+                  </Text>
+                  <TouchableOpacity onPress={() => { setSelectedParentId(null); setParentQuery(''); }} activeOpacity={0.7}>
+                    <Text style={styles.successClose}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  <TextInput
+                    style={styles.input}
+                    value={parentQuery}
+                    onChangeText={setParentQuery}
+                    placeholder="Elternteil suchen (Name oder E-Mail)"
+                    placeholderTextColor="#7A90AE"
+                  />
+                  <View style={styles.parentMatches}>
+                    {parentMatches.length === 0 ? (
+                      <Text style={styles.parentMatchEmpty}>Kein Elternteil gefunden.</Text>
+                    ) : parentMatches.map(p => (
+                      <TouchableOpacity key={p.id} style={styles.parentMatchRow} onPress={() => setSelectedParentId(p.id)} activeOpacity={0.7}>
+                        <Text style={styles.parentMatchName}>{p.name}</Text>
+                        {p.email && <Text style={styles.parentMatchEmail}>{p.email}</Text>}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
+            </>
+          )}
 
           {/* Torwart / Feldspieler */}
           <Text style={styles.fieldLabel}>Spielertyp *</Text>
@@ -197,37 +294,45 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
 
           <View style={styles.formRow}>
             <View style={styles.formField}>
-              <Text style={styles.fieldLabel}>Name des Kindes / Kunden *</Text>
+              <Text style={styles.fieldLabel}>Name des Kindes *</Text>
               <TextInput style={styles.input} value={formName} onChangeText={setFormName} placeholder="Max Mustermann" placeholderTextColor="#7A90AE" />
             </View>
-            <View style={styles.formField}>
-              <Text style={styles.fieldLabel}>Elternname</Text>
-              <TextInput style={styles.input} value={formParentName} onChangeText={setFormParentName} placeholder="Maria Mustermann" placeholderTextColor="#7A90AE" />
-            </View>
+            {formMode === 'new' && (
+              <View style={styles.formField}>
+                <Text style={styles.fieldLabel}>Elternname</Text>
+                <TextInput style={styles.input} value={formParentName} onChangeText={setFormParentName} placeholder="Maria Mustermann" placeholderTextColor="#7A90AE" />
+              </View>
+            )}
           </View>
-          <View style={styles.formRow}>
-            <View style={styles.formField}>
-              <Text style={styles.fieldLabel}>E-Mail *</Text>
-              <TextInput style={styles.input} value={formEmail} onChangeText={setFormEmail} placeholder="max@beispiel.de" placeholderTextColor="#7A90AE" keyboardType="email-address" autoCapitalize="none" />
+          {formMode === 'new' && (
+            <View style={styles.formRow}>
+              <View style={styles.formField}>
+                <Text style={styles.fieldLabel}>E-Mail *</Text>
+                <TextInput style={styles.input} value={formEmail} onChangeText={setFormEmail} placeholder="max@beispiel.de" placeholderTextColor="#7A90AE" keyboardType="email-address" autoCapitalize="none" />
+              </View>
+              <View style={styles.formField}>
+                <Text style={styles.fieldLabel}>Telefon</Text>
+                <TextInput style={styles.input} value={formPhone} onChangeText={setFormPhone} placeholder="0170 1234567" placeholderTextColor="#7A90AE" keyboardType="phone-pad" />
+              </View>
             </View>
-            <View style={styles.formField}>
-              <Text style={styles.fieldLabel}>Telefon</Text>
-              <TextInput style={styles.input} value={formPhone} onChangeText={setFormPhone} placeholder="0170 1234567" placeholderTextColor="#7A90AE" keyboardType="phone-pad" />
-            </View>
-          </View>
+          )}
           <View style={styles.formRow}>
             <View style={styles.formField}>
               <Text style={styles.fieldLabel}>Geburtsdatum (YYYY-MM-DD)</Text>
               <TextInput style={styles.input} value={formBirth} onChangeText={setFormBirth} placeholder="2010-05-15" placeholderTextColor="#7A90AE" />
             </View>
-            <View style={styles.formField}>
-              <Text style={styles.fieldLabel}>Adresse</Text>
-              <TextInput style={styles.input} value={formAddress} onChangeText={setFormAddress} placeholder="Musterstr. 1, 12345 Stadt" placeholderTextColor="#7A90AE" />
-            </View>
+            {formMode === 'new' && (
+              <View style={styles.formField}>
+                <Text style={styles.fieldLabel}>Adresse</Text>
+                <TextInput style={styles.input} value={formAddress} onChangeText={setFormAddress} placeholder="Musterstr. 1, 12345 Stadt" placeholderTextColor="#7A90AE" />
+              </View>
+            )}
           </View>
           {formError && <Text style={styles.formError}>{formError}</Text>}
           <TouchableOpacity style={[styles.submitBtn, formLoading && { opacity: 0.6 }]} onPress={doCreate} activeOpacity={0.7} disabled={formLoading}>
-            <Text style={styles.submitBtnText}>{formLoading ? 'Wird angelegt...' : 'Kunden anlegen'}</Text>
+            <Text style={styles.submitBtnText}>
+              {formLoading ? 'Wird angelegt...' : formMode === 'sibling' ? 'Spieler hinzufügen' : 'Kunden anlegen'}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -317,7 +422,7 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
           <Text style={styles.empty}>Keine Kunden gefunden.</Text>
         )}
         {filtered.map(c => {
-          const apptCount = allAppointments.filter(a => a.user_id === c.id && a.status === 'confirmed').length;
+          const apptCount = allAppointments.filter(a => a.player_id === c.id && a.status === 'confirmed').length;
           const levelKey = c.level as PlayerLevel | null;
           const isTorwart = c.player_type === 'torwart';
           return (
@@ -448,6 +553,20 @@ const styles = StyleSheet.create({
   },
   submitBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
   formError: { fontSize: 13, color: '#EF4444', fontWeight: '600', marginTop: 12 },
+  selectedParentBox: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+    backgroundColor: 'rgba(74,143,232,0.08)', borderWidth: 1.5, borderColor: '#4A8FE8',
+    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10,
+  },
+  selectedParentName: { flex: 1, fontSize: 14, fontWeight: '700', color: '#152238' },
+  parentMatches: { marginTop: 8, gap: 6 },
+  parentMatchEmpty: { fontSize: 13, color: '#7A90AE', paddingVertical: 8 },
+  parentMatchRow: {
+    backgroundColor: '#F4F8FF', borderWidth: 1, borderColor: 'rgba(21,34,56,0.08)',
+    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10,
+  },
+  parentMatchName: { fontSize: 14, fontWeight: '700', color: '#152238' },
+  parentMatchEmail: { fontSize: 12, color: '#4A6080', marginTop: 2 },
   successBox: {
     marginHorizontal: 32, marginBottom: 16,
     backgroundColor: '#F0FDF4', borderWidth: 1.5, borderColor: '#86EFAC',

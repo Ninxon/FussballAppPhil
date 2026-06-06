@@ -86,7 +86,7 @@ export function DashboardScreen({ customers, allAppointments, loading, onNavigat
         <Text style={styles.empty}>Keine bevorstehenden Termine.</Text>
       ) : (
         upcoming.map(a => {
-          const customer = customers.find(c => c.id === a.user_id);
+          const customer = customers.find(c => c.id === a.player_id);
           const prog = PROGRAMS.find(p => p.id === a.program);
           const color = PROGRAM_COLORS[a.program] ?? '#4A8FE8';
           return (

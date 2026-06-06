@@ -5,16 +5,16 @@ import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 import { GlassCard } from '../components/GlassCard';
 import { Btn } from '../components/Btn';
-import { Appointment, Tab, CancellationToken } from '../types';
+import { Appointment, Tab, CancellationToken, Player } from '../types';
 import { todayStr, fmtDate } from '../constants/i18n';
-import { Profile } from '../hooks/useProfile';
 import { PROGRAMS } from '../constants/programs';
 
 interface Props {
   appointments: Appointment[];
-  profile: Profile | null;
+  player: Player | null;
   activeTokens: CancellationToken[];
   setTab: (t: Tab) => void;
+  header?: React.ReactNode;
 }
 
 function daysUntil(isoDate: string): number {
@@ -178,11 +178,11 @@ function getStyles(C: Colors) {
   });
 }
 
-export function HomeScreen({ appointments, profile, activeTokens, setTab }: Props) {
+export function HomeScreen({ appointments, player, activeTokens, setTab, header }: Props) {
   const { C } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
   const insets = useSafeAreaInsets();
-  const firstName = profile?.full_name?.split(' ')[0] ?? '';
+  const firstName = player?.name?.split(' ')[0] ?? '';
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
 
@@ -228,6 +228,8 @@ export function HomeScreen({ appointments, profile, activeTokens, setTab }: Prop
           <Text style={styles.headerSub}>PK Fussballschule</Text>
           <Text style={styles.headerTitle}>Guten Tag,{'\n'}{firstName}!</Text>
         </View>
+
+        {header && <View style={{ paddingHorizontal: 20 }}>{header}</View>}
 
         {/* Nachholtermin-Frist */}
         {earliestToken && tokenDaysLeft !== null && (

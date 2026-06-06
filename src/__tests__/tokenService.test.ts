@@ -37,9 +37,9 @@ describe('TokenService.fetchActive', () => {
     expect(supabase.from).toHaveBeenCalledWith('cancellation_tokens');
   });
 
-  it('filters by user_id', () => {
+  it('filters by player_id', () => {
     TokenService.fetchActive('user-1');
-    expect(mockChain.eq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(mockChain.eq).toHaveBeenCalledWith('player_id', 'user-1');
   });
 
   it('filters used_at IS NULL', () => {
@@ -56,7 +56,7 @@ describe('TokenService.fetchActive', () => {
 describe('TokenService.insert', () => {
   it('inserts token data and returns single', () => {
     const data = {
-      user_id: 'u1',
+      player_id: 'p1',
       category: 'individual',
       expires_at: '2024-07-01T00:00:00Z',
       source_appointment_id: 'appt-1',
@@ -78,9 +78,9 @@ describe('TokenService.markUsed', () => {
 });
 
 describe('TokenService.fetchAllActive', () => {
-  it('selects user_id and category', () => {
+  it('selects player_id and category', () => {
     TokenService.fetchAllActive();
-    expect(mockChain.select).toHaveBeenCalledWith('user_id, category');
+    expect(mockChain.select).toHaveBeenCalledWith('player_id, category');
   });
 
   it('filters unspent tokens with future expiry', () => {

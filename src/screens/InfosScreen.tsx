@@ -5,8 +5,7 @@ import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 import { GlassCard } from '../components/GlassCard';
 import { supabase } from '../lib/supabase';
-import { AppNotification } from '../types';
-import { Profile } from '../hooks/useProfile';
+import { AppNotification, Player } from '../types';
 
 function fmtDate(iso: string) {
   const d = new Date(iso);
@@ -14,7 +13,7 @@ function fmtDate(iso: string) {
 }
 
 interface Props {
-  profile: Profile | null;
+  player: Player | null;
 }
 
 function getStyles(C: Colors) {
@@ -73,7 +72,7 @@ function getStyles(C: Colors) {
   });
 }
 
-export function InfosScreen({ profile }: Props) {
+export function InfosScreen({ player }: Props) {
   const { C } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
   const insets = useSafeAreaInsets();
@@ -92,7 +91,7 @@ export function InfosScreen({ profile }: Props) {
   }, []);
 
   const visibleNotifications = notifications.filter(n =>
-    !n.location || n.location === profile?.location
+    !n.location || n.location === player?.location
   );
 
   return (

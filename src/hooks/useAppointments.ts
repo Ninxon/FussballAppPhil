@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { Appointment, CancellationToken, ProgramCategory, SlotCount, SlotPlayer } from '../types';
+import { Appointment, CancellationToken, ProgramCategory, SlotCount, SlotPlayer, Player } from '../types';
 import { PROGRAM_CATEGORY, ProgramId } from '../constants/programs';
 import { checkDailyConflict, checkProgramPermission } from '../utils/bookingRules';
-import { Profile } from './useProfile';
 import { AppointmentService } from '../services/appointmentService';
 import { TokenService } from '../services/tokenService';
 import { EmailService } from '../services/emailService';
@@ -16,44 +15,39 @@ function getCategory(program: string): ProgramCategory {
 const fmtTime = <T extends { time?: string | null }>(a: T): T =>
   ({ ...a, time: a.time ? a.time.slice(0, 5) : a.time });
 
-export function useAppointments(profile: Profile | null) {
+// Termine/Tokens beziehen sich auf das aktive Kind (activePlayer). Slot-Zaehler
+// und Spieler-Infos sind global/anonym und unabhaengig vom aktiven Kind.
+export function useAppointments(activePlayer: Player | null) {
   const [slotCounts, setSlotCounts] = useState<SlotCount[]>([]);
   const [slotPlayers, setSlotPlayers] = useState<SlotPlayer[]>([]);
   const [myAppointments, setMyAppointments] = useState<Appointment[]>([]);
   const [activeTokens, setActiveTokens] = useState<CancellationToken[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
-  const userIdRef = useRef<string | null>(null);
+  const activePlayerIdRef = useRef<string | null>(null);
   // Track IDs already handled by optimistic updates to prevent Realtime double-counting
   const optimisticallyHandledRef = useRef<Set<string>>(new Set());
   // Same guard for cancellations (UPDATE confirmed→cancelled)
   const optimisticallyHandledCancelRef = useRef<Set<string>>(new Set());
 
+  // --- Globale Slot-Daten + Realtime (unabhaengig vom aktiven Kind) ----------
   useEffect(() => {
     let isMounted = true;
 
-    const loadData = async (uid: string) => {
-      const [countsData, playersData, allData, tokenData] = await Promise.all([
+    const loadSlotData = async () => {
+      const [countsData, playersData] = await Promise.all([
         AppointmentService.fetchSlotCounts(),
         AppointmentService.fetchSlotPlayers(),
-        AppointmentService.fetchAll(),
-        TokenService.fetchActive(uid),
       ]);
       if (!isMounted) return;
       if (countsData.data) setSlotCounts(countsData.data as SlotCount[]);
       if (playersData.data) setSlotPlayers(playersData.data as SlotPlayer[]);
-      if (allData.data) setMyAppointments((allData.data as Appointment[]).map(fmtTime));
-      setActiveTokens((tokenData.data ?? []) as CancellationToken[]);
-      setLoading(false);
     };
 
     const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!isMounted) return;
       const user = session?.user ?? null;
       if (user && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
-        setUserId(user.id);
-        userIdRef.current = user.id;
-        loadData(user.id);
+        loadSlotData();
       } else if (!user) {
         setSlotCounts([]);
         setSlotPlayers([]);
@@ -68,7 +62,7 @@ export function useAppointments(profile: Profile | null) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointments' }, (payload) => {
         if (!isMounted) return;
         const appt = fmtTime(payload.new as Appointment);
-        if (userIdRef.current && appt.user_id === userIdRef.current) {
+        if (activePlayerIdRef.current && appt.player_id === activePlayerIdRef.current) {
           setMyAppointments(prev => prev.some(a => a.id === appt.id) ? prev : [...prev, appt]);
         }
         // Skip slot count / player updates if this appointment was already handled
@@ -100,7 +94,9 @@ export function useAppointments(profile: Profile | null) {
         if (!isMounted) return;
         const appt = fmtTime(payload.new as Appointment);
         const old = fmtTime(payload.old as Appointment);
-        setMyAppointments(prev => prev.map(a => a.id === appt.id ? appt : a));
+        if (activePlayerIdRef.current && appt.player_id === activePlayerIdRef.current) {
+          setMyAppointments(prev => prev.map(a => a.id === appt.id ? appt : a));
+        }
         if (old.status === 'confirmed' && appt.status === 'cancelled') {
           if (optimisticallyHandledCancelRef.current.has(appt.id)) {
             optimisticallyHandledCancelRef.current.delete(appt.id);
@@ -160,6 +156,34 @@ export function useAppointments(profile: Profile | null) {
     };
   }, []);
 
+  // --- Termine + Tokens des aktiven Kindes ----------------------------------
+  useEffect(() => {
+    activePlayerIdRef.current = activePlayer?.id ?? null;
+    let isMounted = true;
+
+    if (!activePlayer) {
+      // Noch kein aktives Kind (Spieler werden geladen) -> leere Listen, aber
+      // loading bleibt aktiv, damit die UI keinen verfruehten Leerzustand zeigt.
+      setMyAppointments([]);
+      setActiveTokens([]);
+      return;
+    }
+
+    setLoading(true);
+    (async () => {
+      const [apptData, tokenData] = await Promise.all([
+        AppointmentService.fetchByPlayer(activePlayer.id),
+        TokenService.fetchActive(activePlayer.id),
+      ]);
+      if (!isMounted) return;
+      setMyAppointments(((apptData.data ?? []) as Appointment[]).map(fmtTime));
+      setActiveTokens((tokenData.data ?? []) as CancellationToken[]);
+      setLoading(false);
+    })();
+
+    return () => { isMounted = false; };
+  }, [activePlayer?.id]);
+
   const refreshSlotData = useCallback(async () => {
     const [countsData, playersData] = await Promise.all([
       AppointmentService.fetchSlotCounts(),
@@ -173,9 +197,7 @@ export function useAppointments(profile: Profile | null) {
     date: string, time: string, program: string,
     location: 'Rüsselsheim' | 'Kelsterbach' | null = null,
   ) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user;
-    if (!user) return { error: { message: 'Nicht eingeloggt.' } };
+    if (!activePlayer) return { error: { message: 'Kein Spieler ausgewählt.' } };
 
     const category = getCategory(program);
     const activeToken = activeTokens.find(t => t.category === category);
@@ -190,10 +212,8 @@ export function useAppointments(profile: Profile | null) {
       return { error: { message: `Nachholtermin muss bis ${maxDate.toLocaleDateString('de-DE')} gebucht werden.` } };
     }
 
-    if (profile) {
-      const permCheck = checkProgramPermission(profile, program as ProgramId);
-      if (!permCheck.allowed) return { error: { message: permCheck.reason! } };
-    }
+    const permCheck = checkProgramPermission(activePlayer, program as ProgramId);
+    if (!permCheck.allowed) return { error: { message: permCheck.reason! } };
 
     const dailyConflict = checkDailyConflict(
       myAppointments.filter(a => a.status === 'confirmed'), date, time,
@@ -201,6 +221,7 @@ export function useAppointments(profile: Profile | null) {
     if (!dailyConflict.allowed) return { error: { message: dailyConflict.reason! } };
 
     const { data, error } = await supabase.rpc('book_with_token', {
+      p_player_id: activePlayer.id,
       p_token_id: activeToken.id,
       p_date: date,
       p_time: time,
@@ -235,7 +256,7 @@ export function useAppointments(profile: Profile | null) {
     setActiveTokens(prev => prev.filter(t => t.id !== activeToken.id));
 
     EmailService.sendBooking({
-      name: profile?.full_name ?? '',
+      name: activePlayer.name ?? '',
       date, time, program, location: location ?? undefined,
     });
 
@@ -244,8 +265,6 @@ export function useAppointments(profile: Profile | null) {
 
   const cancelAppointment = async (id: string, skipToken = false) => {
     const appt = myAppointments.find(a => a.id === id);
-    const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user;
 
     const { data, error } = await supabase.rpc('cancel_and_issue_token', {
       p_appointment_id: id,
@@ -280,9 +299,9 @@ export function useAppointments(profile: Profile | null) {
     const newToken = result?.token as CancellationToken | undefined;
     if (newToken && !skipToken) setActiveTokens(prev => [...prev, newToken]);
 
-    if (appt && user) {
+    if (appt) {
       EmailService.sendCancellation({
-        name: profile?.full_name ?? '',
+        name: activePlayer?.name ?? '',
         date: appt.date, time: appt.time, program: appt.program,
       });
     }
@@ -290,5 +309,5 @@ export function useAppointments(profile: Profile | null) {
     return { error: null };
   };
 
-  return { slotCounts, slotPlayers, myAppointments, activeTokens, loading, addAppointment, cancelAppointment, userId, refreshSlotData };
+  return { slotCounts, slotPlayers, myAppointments, activeTokens, loading, addAppointment, cancelAppointment, refreshSlotData };
 }

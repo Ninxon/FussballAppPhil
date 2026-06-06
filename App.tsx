@@ -11,7 +11,9 @@ import { supabase } from './src/lib/supabase';
 import { Tab } from './src/types';
 import { useAppointments } from './src/hooks/useAppointments';
 import { useProfile } from './src/hooks/useProfile';
+import { usePlayers } from './src/hooks/usePlayers';
 import { useTrainerSchedules } from './src/hooks/useTrainerSchedules';
+import { PlayerSwitcher } from './src/components/PlayerSwitcher';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { ResetPasswordScreen } from './src/screens/ResetPasswordScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
@@ -77,8 +79,13 @@ function AppInner() {
   const [passwordRecovery, setPasswordRecovery] = useState(false);
   const [tab, setTab] = useState<Tab>('home');
   const { profile } = useProfile();
-  const { slotCounts, slotPlayers, myAppointments, activeTokens, addAppointment, cancelAppointment, refreshSlotData } = useAppointments(profile);
+  const { players, activePlayer, activePlayerId, setActivePlayer } = usePlayers();
+  const { slotCounts, slotPlayers, myAppointments, activeTokens, addAppointment, cancelAppointment, refreshSlotData } = useAppointments(activePlayer);
   const { trainerSchedules, trainers: trainerProfiles } = useTrainerSchedules();
+
+  const switcher = (
+    <PlayerSwitcher players={players} activePlayerId={activePlayerId} onSelect={setActivePlayer} />
+  );
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -168,9 +175,10 @@ function AppInner() {
             {tab === 'home' && (
               <HomeScreen
                 appointments={myAppointments}
-                profile={profile}
+                player={activePlayer}
                 activeTokens={activeTokens}
                 setTab={setTab}
+                header={switcher}
               />
             )}
             {tab === 'termine' && (
@@ -179,6 +187,7 @@ function AppInner() {
                 cancelAppointment={cancelAppointment}
                 activeTokens={activeTokens}
                 setTab={setTab}
+                header={switcher}
               />
             )}
             {tab === 'buchen' && (
@@ -188,19 +197,20 @@ function AppInner() {
                 slotPlayers={slotPlayers}
                 myAppointments={myAppointments}
                 activeTokens={activeTokens}
-                profile={profile}
+                player={activePlayer}
                 addAppointment={(d, t, p) => addAppointment(d, t, p)}
                 setTab={setTab}
                 trainerSchedules={trainerSchedules}
                 trainers={trainerProfiles}
                 refreshSlotData={refreshSlotData}
+                header={switcher}
               />
             )}
             {tab === 'infos' && (
-              <InfosScreen profile={profile} />
+              <InfosScreen player={activePlayer} />
             )}
             {tab === 'profil' && (
-              <ProfilScreen onLogout={doLogout} />
+              <ProfilScreen onLogout={doLogout} players={players} />
             )}
           </View>
           <BottomNav tab={tab} setTab={setTab} />

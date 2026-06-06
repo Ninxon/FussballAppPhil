@@ -62,27 +62,29 @@ Deno.serve(async (req) => {
       return json({ error: 'appointmentId fehlt' }, 400);
     }
 
-    // Termin + Kunde serverseitig auflösen (nicht vom Client vertrauen).
+    // Termin + Spieler/Eltern serverseitig auflösen (nicht vom Client vertrauen).
+    // Mail geht an den Eltern-Account, Anrede mit dem Kind-Namen.
     const { data: appt, error: apptError } = await serviceClient
       .from('appointments')
-      .select('id, user_id, date, time, program, location')
+      .select('id, player_id, date, time, program, location')
       .eq('id', appointmentId)
       .single();
     if (apptError || !appt) return json({ error: 'Termin nicht gefunden' }, 404);
 
-    const { data: { user: customer } } = await serviceClient.auth.admin.getUserById(appt.user_id);
+    const { data: player } = await serviceClient
+      .from('players')
+      .select('parent_id, name')
+      .eq('id', appt.player_id)
+      .single();
+    if (!player?.parent_id) return json({ error: 'Spieler nicht gefunden' }, 404);
+
+    const { data: { user: customer } } = await serviceClient.auth.admin.getUserById(player.parent_id);
     if (!customer?.email) {
       return json({ error: 'Keine E-Mail-Adresse für diesen Kunden hinterlegt' }, 400);
     }
 
-    const { data: profile } = await serviceClient
-      .from('profiles')
-      .select('full_name')
-      .eq('id', appt.user_id)
-      .single();
-
     const programName = PROGRAM_NAMES[appt.program as string] ?? 'Training';
-    const safeName = (profile?.full_name ?? '').replace(/[<>]/g, '').slice(0, 100);
+    const safeName = (player.name ?? '').replace(/[<>]/g, '').slice(0, 100);
     const safeTime = (appt.time as string).slice(0, 5);
     const dateParts = (appt.date as string).split('-');
     const safeDate = dateParts.length === 3
