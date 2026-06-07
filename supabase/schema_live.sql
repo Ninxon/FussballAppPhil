@@ -259,28 +259,20 @@ BEGIN
       'Dieser Nachholtermin kann nicht mehr storniert werden. Bitte wende dich an deinen Trainer.');
   END IF;
 
-  -- Nur eine aktive Storno-Kette gleichzeitig: ein Kunde darf einen Original-
-  -- termin nicht stornieren, solange noch eine Kette offen ist (offener Token
-  -- oder zukuenftiger Nachholtermin). Nachhol-Stornos und Admin-Stornos sind
-  -- ausgenommen.
+  -- Nur ein offener Gutschein blockt das Stornieren eines Originaltermins:
+  -- ein bereits gebuchter (zukuenftiger) Nachholtermin blockt NICHT mehr.
+  -- Nachhol-Stornos und Admin-Stornos sind ausgenommen.
   IF NOT v_appt.is_makeup AND NOT v_is_admin THEN
     SELECT EXISTS (
       SELECT 1 FROM public.cancellation_tokens
        WHERE player_id  = v_appt.player_id
          AND used_at    IS NULL
          AND expires_at > NOW()
-    ) OR EXISTS (
-      SELECT 1 FROM public.appointments
-       WHERE player_id  = v_appt.player_id
-         AND id         <> v_appt.id
-         AND is_makeup  = true
-         AND status     = 'confirmed'
-         AND (date + "time") > (NOW() AT TIME ZONE 'Europe/Berlin')::timestamp
     ) INTO v_has_open_chain;
 
     IF v_has_open_chain THEN
       RETURN json_build_object('error',
-        'Du hast bereits einen offenen Nachholtermin oder Gutschein. Schliesse diesen erst ab, bevor du einen weiteren Termin stornieren kannst.');
+        'Du hast noch einen offenen Gutschein. Bitte buche damit zuerst deinen Nachholtermin, bevor du einen weiteren Termin stornierst.');
     END IF;
   END IF;
 
