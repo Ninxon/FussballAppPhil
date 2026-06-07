@@ -259,10 +259,11 @@ BEGIN
       'Dieser Nachholtermin kann nicht mehr storniert werden. Bitte wende dich an deinen Trainer.');
   END IF;
 
-  -- Nur ein offener Gutschein blockt das Stornieren eines Originaltermins:
-  -- ein bereits gebuchter (zukuenftiger) Nachholtermin blockt NICHT mehr.
-  -- Nachhol-Stornos und Admin-Stornos sind ausgenommen.
-  IF NOT v_appt.is_makeup AND NOT v_is_admin THEN
+  -- Max. EIN offener Gutschein: jede Kunden-Stornierung (auch die eines
+  -- Nachholtermins) ist gesperrt, solange ein unbenutzter Gutschein existiert.
+  -- Ein bereits gebuchter (zukuenftiger) Nachholtermin blockt NICHT.
+  -- Admin-Stornos sind ausgenommen.
+  IF NOT v_is_admin THEN
     SELECT EXISTS (
       SELECT 1 FROM public.cancellation_tokens
        WHERE player_id  = v_appt.player_id
