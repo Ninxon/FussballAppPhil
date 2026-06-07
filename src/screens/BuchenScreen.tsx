@@ -470,6 +470,21 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
     const { slotEntries, availableLocations } = slotInfo;
     const visibleEntries = slotEntries.filter(e => locFilter === 'alle' || e.location === locFilter);
 
+    // Nicht buchbare Slots vorab herausfiltern, damit auch die „keine Zeiten"-
+    // Meldung greift. Gruppe: inkompatible Gruppen verstecken (wie bisher).
+    // Individual (1:1): nur verfügbare zeigen — volle/vergangene/eigene ausblenden,
+    // sonst verwirrt eine Anzeige wie „2 von 2 frei" bei einem Einzeltraining.
+    const renderableEntries = visibleEntries.filter(entry => {
+      const { totalCapacity, booked, groupUnavailable } = slotAvailability(entry.time, entry.location);
+      const userBooked = myAppointments.some(a => a.date === selDate && a.time === entry.time && a.status === 'confirmed');
+      const isPast = isToday && entry.time <= nowStr;
+      if (isGroup) {
+        if (groupUnavailable && !isPast && !userBooked && playerBirthYear && playerLevel) return false;
+        return true;
+      }
+      return booked < totalCapacity && !userBooked && !isPast;
+    });
+
     return (
       <FadeUp>
         <BackBtn onPress={() => setStep('date')} />
@@ -486,20 +501,16 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
           </View>
         )}
 
-        {visibleEntries.length === 0 ? (
+        {renderableEntries.length === 0 ? (
           <Text style={{ color: C.textFaint, textAlign: 'center', marginTop: 24, fontSize: 15 }}>
             An diesem Tag sind keine Zeiten verfügbar.
           </Text>
         ) : (
           <View style={[styles.slotGrid, { marginBottom: 20 }]}>
-            {visibleEntries.map(entry => {
-              const { totalCapacity, booked, freeInGroup, groupUnavailable } = slotAvailability(entry.time, entry.location);
+            {renderableEntries.map(entry => {
+              const { totalCapacity, booked, freeInGroup } = slotAvailability(entry.time, entry.location);
               const userBooked = myAppointments.some(a => a.date === selDate && a.time === entry.time && a.status === 'confirmed');
               const isPast = isToday && entry.time <= nowStr;
-
-              if (isGroup && groupUnavailable && !isPast && !userBooked && playerBirthYear && playerLevel) {
-                return null;
-              }
 
               const full = booked >= totalCapacity || userBooked || isPast;
               const sel = selTime === entry.time && (selLocation ?? null) === (entry.location ?? null);
@@ -543,12 +554,12 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
 
   // ── ConfirmStep ───────────────────────────────────────────────
   function ConfirmStep() {
-    const { totalCapacity, booked, isGroup, freeInGroup } = slotAvailability(selTime!, selLocation);
-    // Mirror the time step: for groups show the free spots in the group the
-    // player actually joins; for individual show the slot-wide free count.
+    const { isGroup, freeInGroup } = slotAvailability(selTime!, selLocation);
+    // Gruppe: freie Plätze in der Gruppe, der der Spieler beitritt. Individual
+    // (1:1): nur „Verfügbar" — eine „X von Y"-Zählung verwirrt beim Einzeltraining.
     const availLabel = isGroup
       ? `${freeInGroup} von ${GROUP_SIZE} Plätzen frei`
-      : `${Math.max(0, totalCapacity - booked)} von ${totalCapacity} Plätzen frei`;
+      : 'Verfügbar';
     const doBook = async () => {
       setBookingError(null);
       const { error } = await addAppointment(selDate!, selTime!, selProgram!, selLocation);
