@@ -48,6 +48,18 @@ const storage = Platform.OS === 'web' ? cookieStorage : {
   removeItem: (key: string) => SecureStore.deleteItemAsync(key),
 };
 
+// Recovery-Link zuverlässig erkennen: Bei einem Passwort-Reset hängt Supabase
+// `type=recovery` an die URL. `detectSessionInUrl` parst den Hash aber ASYNCHRON
+// beim Laden und entfernt ihn danach sofort — hängt der React-Listener erst
+// später, geht das PASSWORD_RECOVERY-Event verloren und der Nutzer wird einfach
+// eingeloggt. Deshalb lesen wir den Marker hier SYNCHRON beim Modul-Load aus
+// (läuft garantiert vor dem async URL-Parsing), bevor der Hash geleert wird.
+const RECOVERY_RE = /(^|[#&?])type=recovery(&|$)/;
+export const isPasswordRecoveryUrl =
+  Platform.OS === 'web' && typeof window !== 'undefined'
+    ? RECOVERY_RE.test(window.location.hash) || RECOVERY_RE.test(window.location.search)
+    : false;
+
 export const supabase = createClient(supabaseUrl!, supabaseAnonKey!, {
   auth: {
     storage,

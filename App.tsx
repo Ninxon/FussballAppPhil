@@ -7,7 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from './src/constants/colors';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
-import { supabase } from './src/lib/supabase';
+import { supabase, isPasswordRecoveryUrl } from './src/lib/supabase';
 import { Tab } from './src/types';
 import { useAppointments } from './src/hooks/useAppointments';
 import { useProfile } from './src/hooks/useProfile';
@@ -76,7 +76,9 @@ function AppInner() {
 
   const [loggedIn, setLoggedIn] = useState(false);
   const [role, setRole] = useState<'admin' | 'customer' | 'trainer' | null>(null);
-  const [passwordRecovery, setPasswordRecovery] = useState(false);
+  // Init aus der URL (synchron beim Modul-Load erfasst), damit ein Recovery-Link
+  // nicht wegen verpasstem PASSWORD_RECOVERY-Event als normaler Login durchrutscht.
+  const [passwordRecovery, setPasswordRecovery] = useState(isPasswordRecoveryUrl);
   const [tab, setTab] = useState<Tab>('home');
   const { profile } = useProfile();
   const { players, activePlayer, activePlayerId, setActivePlayer } = usePlayers();
