@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ScrollView,
@@ -104,8 +104,30 @@ export function ResetPasswordScreen({ onDone }: Props) {
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  // Der Screen wird (bewusst) schon angezeigt, sobald die URL ein Recovery ist —
+  // die Recovery-Session baut detectSessionInUrl aber erst asynchron auf. Erst
+  // wenn sie steht, darf updateUser laufen (sonst „Auth session missing").
+  const [sessionReady, setSessionReady] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    let settled = false;
+    const markReady = (session: unknown) => {
+      if (mounted && session && !settled) { settled = true; setSessionReady(true); }
+    };
+    supabase.auth.getSession().then(({ data: { session } }) => markReady(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => markReady(session));
+    // Kommt nach kurzer Zeit keine Session zustande, ist der Link ab-/verbraucht.
+    const timer = setTimeout(() => {
+      if (mounted && !settled) {
+        setErr('Der Reset-Link ist abgelaufen oder wurde bereits verwendet. Bitte fordere einen neuen an.');
+      }
+    }, 8000);
+    return () => { mounted = false; subscription.unsubscribe(); clearTimeout(timer); };
+  }, []);
 
   const doReset = async () => {
+    if (!sessionReady) { setErr('Der Link wird noch geprüft – bitte einen Moment warten.'); return; }
     if (pw.length < 6) { setErr('Passwort muss mindestens 6 Zeichen lang sein.'); return; }
     if (pw !== pwConfirm) { setErr('Passwörter stimmen nicht überein.'); return; }
     setErr('');
@@ -113,7 +135,11 @@ export function ResetPasswordScreen({ onDone }: Props) {
     const { error } = await supabase.auth.updateUser({ password: pw });
     setLoading(false);
     if (error) {
-      setErr('Fehler beim Speichern. Bitte versuche es erneut.');
+      setErr(
+        /session|missing|expired|jwt|token/i.test(error.message)
+          ? 'Der Reset-Link ist abgelaufen oder wurde bereits verwendet. Bitte fordere einen neuen an.'
+          : `Fehler beim Speichern: ${error.message}`,
+      );
     } else {
       setSuccess(true);
       setTimeout(() => onDone(), 1800);
@@ -178,12 +204,12 @@ export function ResetPasswordScreen({ onDone }: Props) {
 
               <TouchableOpacity
                 onPress={doReset}
-                disabled={loading}
+                disabled={loading || !sessionReady}
                 activeOpacity={0.88}
-                style={[styles.saveBtn, loading && { opacity: 0.7 }]}
+                style={[styles.saveBtn, (loading || !sessionReady) && { opacity: 0.7 }]}
               >
                 <Text style={styles.saveBtnLabel}>
-                  {loading ? 'Wird gespeichert…' : 'Passwort speichern'}
+                  {loading ? 'Wird gespeichert…' : !sessionReady ? 'Link wird geprüft…' : 'Passwort speichern'}
                 </Text>
               </TouchableOpacity>
             </>
