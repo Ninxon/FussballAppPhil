@@ -133,9 +133,27 @@ export function ProfilScreen({ onLogout, players }: Props) {
     setContactLoading(false);
   };
 
-  const initials = profile?.full_name
-    ? profile.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
-    : '?';
+  // Eltern-Account: oben die Namen der KINDER zeigen (nicht den Eltern-Namen).
+  // Vornamen reichen für die große Box; die vollen Namen + Nummern stehen
+  // gebündelt in der "Spieler"-Karte darunter.
+  const playerNames = players.map(p => (p.name ?? '').trim()).filter(Boolean);
+  const firstNames = playerNames.map(n => n.split(/\s+/)[0]);
+  const displayName = firstNames.length
+    ? (firstNames.length <= 2
+        ? firstNames.join(' & ')
+        : `${firstNames.slice(0, -1).join(', ')} & ${firstNames[firstNames.length - 1]}`)
+    : (profile?.full_name ?? '—');
+
+  const initials = (() => {
+    if (players.length === 1) {
+      const parts = playerNames[0].split(/\s+/);
+      return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')) || '?';
+    }
+    if (firstNames.length) return firstNames.map(n => n[0]).join('').slice(0, 3);
+    return profile?.full_name
+      ? profile.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)
+      : '?';
+  })().toUpperCase();
 
   return (
     <ScrollView
@@ -152,12 +170,9 @@ export function ProfilScreen({ onLogout, players }: Props) {
           <View style={styles.avatarCircle}>
             <Text style={styles.avatarIcon}>{loading ? '' : initials}</Text>
           </View>
-          <Text style={styles.userName}>{loading ? '…' : (profile?.full_name ?? '—')}</Text>
+          <Text style={styles.userName}>{loading ? '…' : displayName}</Text>
           <Text style={styles.userType}>Elternaccount</Text>
           <View style={styles.userChips}>
-            <View style={styles.chip}>
-              <Text style={styles.chipText}>Nr. {profile?.customer_number ?? '—'}</Text>
-            </View>
             <View style={styles.chip}>
               <Text style={styles.chipText}>{players.length === 1 ? '1 Spieler' : `${players.length} Spieler`}</Text>
             </View>
@@ -237,7 +252,6 @@ export function ProfilScreen({ onLogout, players }: Props) {
 
         {/* Allgemein */}
         <SectionCard title="Allgemein">
-          <InfoRow label="Kundennummer" value={profile?.customer_number?.toString() ?? ''} />
           <View style={[styles.infoRow, pwOpen && styles.infoRowBorder]}>
             <Text style={styles.infoKey}>App Passwort</Text>
             <TouchableOpacity
