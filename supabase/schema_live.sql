@@ -1515,14 +1515,12 @@ GRANT ALL ON FUNCTION "public"."get_slot_players"() TO "service_role";
 
 
 REVOKE ALL ON FUNCTION "public"."get_trainer_monthly_counts"() FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_trainer_monthly_counts"() TO "anon";
 GRANT ALL ON FUNCTION "public"."get_trainer_monthly_counts"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_trainer_monthly_counts"() TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."guard_profile_self_update"() TO "anon";
-GRANT ALL ON FUNCTION "public"."guard_profile_self_update"() TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."guard_profile_self_update"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."guard_profile_self_update"() TO "service_role";
 
 
@@ -1544,14 +1542,12 @@ GRANT ALL ON FUNCTION "public"."rls_auto_enable"() TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."tg_trainer_schedules_block_delete"() TO "anon";
-GRANT ALL ON FUNCTION "public"."tg_trainer_schedules_block_delete"() TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."tg_trainer_schedules_block_delete"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."tg_trainer_schedules_block_delete"() TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."tg_trainer_schedules_migrate_appts"() TO "anon";
-GRANT ALL ON FUNCTION "public"."tg_trainer_schedules_migrate_appts"() TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."tg_trainer_schedules_migrate_appts"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."tg_trainer_schedules_migrate_appts"() TO "service_role";
 
 

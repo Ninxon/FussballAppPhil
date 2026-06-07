@@ -149,3 +149,17 @@ COMMENT ON FUNCTION public.book_with_token(uuid, uuid, date, time without time z
 REVOKE ALL ON FUNCTION public.book_with_token(uuid, uuid, date, time without time zone, text, text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.book_with_token(uuid, uuid, date, time without time zone, text, text) TO authenticated;
 GRANT ALL ON FUNCTION public.book_with_token(uuid, uuid, date, time without time zone, text, text) TO service_role;
+
+
+-- ============================================================
+-- Pre-Launch-Härtung der Funktions-Rechte (Advisor 0028/0029)
+-- ============================================================
+-- Die neue book_with_token-Signatur erhielt über ALTER DEFAULT PRIVILEGES
+-- automatisch anon-EXECUTE; das REVOKE oben traf nur PUBLIC. Hier anon explizit
+-- entfernen (Buchen erfordert ohnehin eine Session). Reine Trigger-Funktionen
+-- sind keine API-Endpunkte -> EXECUTE komplett sperren (Trigger feuern weiter).
+REVOKE EXECUTE ON FUNCTION public.book_with_token(uuid, uuid, date, time without time zone, text, text) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.get_trainer_monthly_counts() FROM anon;
+REVOKE ALL ON FUNCTION public.guard_profile_self_update() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.tg_trainer_schedules_block_delete() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.tg_trainer_schedules_migrate_appts() FROM PUBLIC, anon, authenticated;
