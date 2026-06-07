@@ -80,6 +80,32 @@ Deno.serve(async (req) => {
     html,
   });
 
+  // Admin zusätzlich informieren, damit er über Kunden-Stornos Bescheid weiß.
+  // Empfänger: ADMIN_NOTIFY_EMAIL (falls gesetzt), sonst die Geschäftsadresse.
+  // Fehlschlag hier darf die bereits versendete Kunden-Mail nicht kippen.
+  const adminEmail = Deno.env.get('ADMIN_NOTIFY_EMAIL') || Deno.env.get('GMAIL_USER');
+  if (adminEmail) {
+    try {
+      const adminHtml = renderEmailLayout({
+        title: 'Termin storniert',
+        accentColor: BRAND_COLORS.accentRed,
+        preheader: `${safeName} hat ${programName} am ${safeDate} storniert.`,
+        greeting: 'Hallo Team,',
+        intro: 'ein Kunde hat selbstständig einen Termin storniert:',
+        rows: [{ label: 'Spieler', value: safeName }, ...rows],
+        signOff: 'Automatische Benachrichtigung.',
+      });
+      await transporter.sendMail({
+        from: FROM_HEADER,
+        to: adminEmail,
+        subject: `Stornierung: ${safeName} – ${programName} am ${safeDate}`,
+        html: adminHtml,
+      });
+    } catch (e) {
+      console.warn('Admin-Benachrichtigung (Storno) fehlgeschlagen:', e);
+    }
+  }
+
   return new Response(JSON.stringify({ ok: true }), {
     headers: { ...cors, 'Content-Type': 'application/json' },
   });

@@ -81,6 +81,32 @@ Deno.serve(async (req) => {
     html,
   });
 
+  // Admin zusätzlich informieren, damit er über Kunden-Buchungen Bescheid weiß.
+  // Empfänger: ADMIN_NOTIFY_EMAIL (falls gesetzt), sonst die Geschäftsadresse.
+  // Fehlschlag hier darf die bereits versendete Kunden-Mail nicht kippen.
+  const adminEmail = Deno.env.get('ADMIN_NOTIFY_EMAIL') || Deno.env.get('GMAIL_USER');
+  if (adminEmail) {
+    try {
+      const adminHtml = renderEmailLayout({
+        title: 'Nachholtermin gebucht',
+        accentColor: BRAND_COLORS.accentGreen,
+        preheader: `${safeName} hat ${programName} am ${safeDate} gebucht.`,
+        greeting: 'Hallo Team,',
+        intro: 'ein Kunde hat selbstständig einen Nachholtermin gebucht:',
+        rows: [{ label: 'Spieler', value: safeName }, ...rows],
+        signOff: 'Automatische Benachrichtigung.',
+      });
+      await transporter.sendMail({
+        from: FROM_HEADER,
+        to: adminEmail,
+        subject: `Neue Buchung: ${safeName} – ${programName} am ${safeDate}`,
+        html: adminHtml,
+      });
+    } catch (e) {
+      console.warn('Admin-Benachrichtigung (Buchung) fehlgeschlagen:', e);
+    }
+  }
+
   return new Response(JSON.stringify({ ok: true }), {
     headers: { ...cors, 'Content-Type': 'application/json' },
   });
