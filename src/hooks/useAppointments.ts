@@ -308,6 +308,7 @@ export function useAppointments(activePlayer: Player | null) {
       EmailService.sendCancellation({
         name: activePlayer?.name ?? '',
         date: appt.date, time: appt.time, program: appt.program,
+        location: appt.location ?? undefined,
       });
     }
 

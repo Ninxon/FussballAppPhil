@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Nicht autorisiert' }), { status: 401, headers: { ...cors, 'Content-Type': 'application/json' } });
   }
 
-  const { name, date, time, program } = await req.json();
+  const { name, date, time, program, location } = await req.json();
   const email = user.email;
   if (!email) {
     return new Response(JSON.stringify({ error: 'Keine E-Mail-Adresse hinterlegt' }), { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } });
@@ -55,12 +55,14 @@ Deno.serve(async (req) => {
   const safeDate = dateParts.length === 3
     ? `${dateParts[2]}.${dateParts[1]}.${dateParts[0]}`
     : rawDate;
+  const safeLocation = (location ?? '').replace(/[<>]/g, '').slice(0, 40);
 
   const rows: EmailRow[] = [
     { label: 'Leistung', value: programName },
     { label: 'Datum', value: safeDate },
     { label: 'Uhrzeit', value: `${safeTime} Uhr` },
   ];
+  if (safeLocation) rows.push({ label: 'Standort', value: safeLocation });
 
   const html = renderEmailLayout({
     title: 'Stornierungsbestätigung',
