@@ -45,6 +45,7 @@ export function usePlayers() {
 
   useEffect(() => {
     let isMounted = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
     const load = async () => {
       const { data } = await PlayerService.fetchMine();
@@ -59,28 +60,38 @@ export function usePlayers() {
       setLoading(false);
     };
 
+    // Realtime nur auf die EIGENEN Kinder hoeren (parent_id=eq.uid). Ohne Filter
+    // wuerde jede players-Aenderung irgendeines Kunden bei JEDEM eingeloggten
+    // Elternteil ein komplettes Neuladen ausloesen.
+    const setupChannel = (uid: string) => {
+      if (channel) return;
+      channel = supabase
+        .channel(`players-live-${Date.now()}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'players', filter: `parent_id=eq.${uid}` },
+          () => { if (isMounted) load(); },
+        )
+        .subscribe();
+    };
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!isMounted) return;
       if (session?.user && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
         load();
+        setupChannel(session.user.id);
       } else if (!session?.user) {
         setPlayers([]);
         setActivePlayerId(null);
         setLoading(false);
+        if (channel) { supabase.removeChannel(channel); channel = null; }
       }
     });
-
-    const channel = supabase
-      .channel(`players-live-${Date.now()}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, () => {
-        if (isMounted) load();
-      })
-      .subscribe();
 
     return () => {
       isMounted = false;
       subscription.unsubscribe();
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, []);
 

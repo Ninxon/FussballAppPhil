@@ -376,10 +376,26 @@ export function useAdminData() {
   // + Tokens; Eltern-Account und Geschwister bleiben bestehen (kein Auth-Delete).
   const deleteCustomer = async (customerId: string): Promise<{ error: string | null }> => {
     try {
+      const parentId = customers.find(c => c.id === customerId)?.parent_id ?? null;
       const { error } = await PlayerService.remove(customerId);
       if (error) return { error: error.message ?? 'Fehler beim Löschen.' };
       setCustomers(prev => prev.filter(c => c.id !== customerId));
       setAllAppointments(prev => prev.filter(a => a.player_id !== customerId));
+
+      // War das der letzte Spieler dieses Elternteils? Dann den verwaisten
+      // (kinderlosen) Eltern-Account gleich mit entfernen, damit kein toter
+      // Login zurueckbleibt. Best effort: der Spieler ist bereits geloescht,
+      // ein Fehler hier darf das Gesamtergebnis nicht kippen.
+      if (parentId) {
+        const siblingsLeft = customers.filter(c => c.parent_id === parentId && c.id !== customerId).length;
+        if (siblingsLeft === 0) {
+          try {
+            await supabase.functions.invoke('delete-customer', { body: { customerId: parentId } });
+          } catch (e) {
+            console.warn('Verwaisten Eltern-Account konnte nicht entfernt werden:', e);
+          }
+        }
+      }
       return { error: null };
     } catch (e: any) {
       return { error: e?.message ?? String(e) };

@@ -374,6 +374,14 @@ export function KundenDetailScreen({
           <Text style={styles.deleteConfirmSub}>
             <Text style={{ fontWeight: '700' }}>{customer.full_name}</Text> und alle zugehörigen Termine werden dauerhaft gelöscht. Der Eltern-Account und etwaige Geschwister bleiben bestehen.
           </Text>
+          {upcoming.length > 0 && (
+            <Text style={[styles.deleteConfirmSub, { color: '#B91C1C', fontWeight: '700' }]}>
+              ⚠️ Dabei {upcoming.length === 1 ? 'geht 1 noch anstehender Termin' : `gehen ${upcoming.length} noch anstehende Termine`} unwiderruflich verloren.
+            </Text>
+          )}
+          <Text style={[styles.deleteConfirmSub, { fontStyle: 'italic' }]}>
+            Nur zum Pausieren? Spieler stattdessen oben „deaktivieren" — das behält alle Daten.
+          </Text>
           {deleteError && <Text style={styles.deleteError}>{deleteError}</Text>}
           <View style={styles.deleteConfirmBtns}>
             <TouchableOpacity style={[styles.deleteConfirmYes, deleteLoading && { opacity: 0.6 }]} onPress={doDelete} disabled={deleteLoading} activeOpacity={0.7}>

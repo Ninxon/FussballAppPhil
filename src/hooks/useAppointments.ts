@@ -164,6 +164,9 @@ export function useAppointments(activePlayer: Player | null) {
     if (!activePlayer) {
       // Noch kein aktives Kind (Spieler werden geladen) -> leere Listen, aber
       // loading bleibt aktiv, damit die UI keinen verfruehten Leerzustand zeigt.
+      // (Hinweis: `loading` wird aktuell nirgends konsumiert; das Gating laeuft
+      //  ueber role===null. Ein kinderloser Account zeigt daher keinen Spinner,
+      //  sondern einen leeren Zustand.)
       setMyAppointments([]);
       setActiveTokens([]);
       return;

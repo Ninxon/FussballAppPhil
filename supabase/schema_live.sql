@@ -75,34 +75,35 @@ $$;
 ALTER FUNCTION "public"."assign_customer_number"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."book_with_token"("p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text") RETURNS json
-    LANGUAGE "plpgsql" SECURITY DEFINER
+CREATE OR REPLACE FUNCTION "public"."assign_player_number"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
     SET "search_path" TO ''
     AS $$
 BEGIN
-  RETURN public.book_with_token(p_token_id, p_date, p_time, p_program, NULL);
+  IF NEW.player_number IS NULL THEN
+    NEW.player_number := nextval('public.customer_number_seq');
+  END IF;
+  RETURN NEW;
 END;
 $$;
 
 
-ALTER FUNCTION "public"."book_with_token"("p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."assign_player_number"() OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."book_with_token"("p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text") IS '@omit';
-
-
-
-CREATE OR REPLACE FUNCTION "public"."book_with_token"("p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text") RETURNS json
+CREATE OR REPLACE FUNCTION "public"."book_with_token"("p_player_id" "uuid", "p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text" DEFAULT NULL) RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 DECLARE
-  v_token        public.cancellation_tokens%ROWTYPE;
-  v_profile      public.profiles%ROWTYPE;
-  v_appt         public.appointments%ROWTYPE;
-  v_category     text;
-  v_birth_year   int;
-  v_trainer_id   uuid;
+  v_token      public.cancellation_tokens%ROWTYPE;
+  v_player     public.players%ROWTYPE;
+  v_appt       public.appointments%ROWTYPE;
+  v_category   text;
+  v_birth_year int;
+  v_trainer_id uuid;
+  v_is_admin   boolean;
+  v_allowed    boolean;
 BEGIN
   IF p_date < CURRENT_DATE THEN
     RETURN json_build_object('error', 'Das Datum liegt in der Vergangenheit.');
@@ -116,10 +117,40 @@ BEGIN
     RETURN json_build_object('error', 'Ungültiger Standort.');
   END IF;
 
+  IF p_program NOT IN ('individual','gruppe','athletik','torhueter_individual','torhueter_gruppe') THEN
+    RETURN json_build_object('error', 'Ungültiges Programm.');
+  END IF;
+
+  v_is_admin := public.is_admin();
+
+  -- Spieler laden + autorisieren (eigenes Kind oder Admin).
+  SELECT * INTO v_player
+  FROM public.players
+  WHERE id = p_player_id
+    AND (parent_id = (SELECT auth.uid()) OR v_is_admin);
+
+  IF NOT FOUND THEN
+    RETURN json_build_object('error', 'Spieler nicht gefunden oder kein Zugriff.');
+  END IF;
+
+  -- Buchungsberechtigung pro Programm. Admin bucht ohne Einschraenkung.
+  IF NOT v_is_admin THEN
+    v_allowed := CASE p_program
+      WHEN 'individual'           THEN v_player.can_book_individual
+      WHEN 'gruppe'               THEN v_player.can_book_gruppe
+      WHEN 'athletik'             THEN v_player.can_book_athletik
+      WHEN 'torhueter_individual' THEN v_player.can_book_torhueter_individual
+      WHEN 'torhueter_gruppe'     THEN v_player.can_book_torhueter_gruppe
+    END;
+    IF NOT v_allowed THEN
+      RETURN json_build_object('error', 'Für dieses Programm besteht keine Buchungsberechtigung.');
+    END IF;
+  END IF;
+
   SELECT * INTO v_token
   FROM public.cancellation_tokens
   WHERE id        = p_token_id
-    AND user_id   = (SELECT auth.uid())
+    AND player_id = p_player_id
     AND used_at   IS NULL
     AND expires_at > NOW()
   FOR UPDATE;
@@ -138,11 +169,9 @@ BEGIN
     RETURN json_build_object('error', 'Token-Kategorie passt nicht zum gewählten Programm.');
   END IF;
 
-  SELECT * INTO v_profile FROM public.profiles WHERE id = (SELECT auth.uid());
-
   v_birth_year := CASE
-    WHEN v_profile.birth_date IS NOT NULL
-    THEN EXTRACT(YEAR FROM v_profile.birth_date)::int
+    WHEN v_player.birth_date IS NOT NULL
+    THEN EXTRACT(YEAR FROM v_player.birth_date)::int
     ELSE NULL
   END;
 
@@ -153,14 +182,14 @@ BEGIN
   END IF;
 
   INSERT INTO public.appointments
-    (user_id, date, "time", status, program, trainer_id, session_birth_year, session_level,
+    (player_id, date, "time", status, program, trainer_id, session_birth_year, session_level,
      is_makeup, makeup_count, location)
   VALUES (
-    (SELECT auth.uid()),
+    p_player_id,
     p_date, p_time, 'confirmed', p_program,
     v_trainer_id,
     v_birth_year,
-    v_profile.level,
+    v_player.level,
     true,
     v_token.makeup_count,
     p_location
@@ -171,7 +200,7 @@ BEGIN
 
   RETURN json_build_object('appointment', json_build_object(
     'id',                 v_appt.id,
-    'user_id',            v_appt.user_id,
+    'player_id',          v_appt.player_id,
     'date',               v_appt.date::text,
     'time',               to_char(v_appt.time, 'HH24:MI'),
     'status',             v_appt.status,
@@ -189,7 +218,10 @@ END;
 $$;
 
 
-ALTER FUNCTION "public"."book_with_token"("p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."book_with_token"("p_player_id" "uuid", "p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."book_with_token"("p_player_id" "uuid", "p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text") IS '@omit';
 
 
 CREATE OR REPLACE FUNCTION "public"."cancel_and_issue_token"("p_appointment_id" "uuid", "p_skip_token" boolean DEFAULT false) RETURNS json
@@ -206,11 +238,12 @@ DECLARE
 BEGIN
   v_is_admin := public.is_admin();
 
-  SELECT * INTO v_appt
-  FROM public.appointments
-  WHERE id = p_appointment_id
-    AND ((SELECT auth.uid()) = user_id OR v_is_admin)
-  FOR UPDATE;
+  SELECT a.* INTO v_appt
+  FROM public.appointments a
+  JOIN public.players pl ON pl.id = a.player_id
+  WHERE a.id = p_appointment_id
+    AND (pl.parent_id = (SELECT auth.uid()) OR v_is_admin)
+  FOR UPDATE OF a;
 
   IF NOT FOUND THEN
     RETURN json_build_object('error', 'Termin nicht gefunden.');
@@ -233,12 +266,12 @@ BEGIN
   IF NOT v_appt.is_makeup AND NOT v_is_admin THEN
     SELECT EXISTS (
       SELECT 1 FROM public.cancellation_tokens
-       WHERE user_id    = v_appt.user_id
+       WHERE player_id  = v_appt.player_id
          AND used_at    IS NULL
          AND expires_at > NOW()
     ) OR EXISTS (
       SELECT 1 FROM public.appointments
-       WHERE user_id    = v_appt.user_id
+       WHERE player_id  = v_appt.player_id
          AND id         <> v_appt.id
          AND is_makeup  = true
          AND status     = 'confirmed'
@@ -273,9 +306,9 @@ BEGIN
   END IF;
 
   INSERT INTO public.cancellation_tokens
-    (user_id, category, expires_at, source_appointment_id, makeup_count)
+    (player_id, category, expires_at, source_appointment_id, makeup_count)
   VALUES (
-    v_appt.user_id, v_category,
+    v_appt.player_id, v_category,
     -- Gültigkeit ab dem TERMIN-Datum (nicht ab dem Storno-Zeitpunkt): ein Monat
     -- ab dem stornierten Termin, gültig bis zum Ende dieses Tages (Europe/Berlin).
     ((v_appt.date + INTERVAL '1 month' + INTERVAL '1 day') AT TIME ZONE 'Europe/Berlin'),
@@ -311,15 +344,15 @@ BEGIN
   END IF;
 
   PERFORM pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtextextended(NEW.user_id::text || '|' || NEW.date::text, 0)
+    pg_catalog.hashtextextended(NEW.player_id::text || '|' || NEW.date::text, 0)
   );
 
   SELECT COUNT(*) INTO existing_count
     FROM public.appointments
-   WHERE user_id = NEW.user_id
-     AND date    = NEW.date
-     AND status  = 'confirmed'
-     AND id     != NEW.id;
+   WHERE player_id = NEW.player_id
+     AND date      = NEW.date
+     AND status    = 'confirmed'
+     AND id       != NEW.id;
 
   IF existing_count >= 2 THEN
     RAISE EXCEPTION 'Bereits zwei Termine an diesem Tag gebucht.';
@@ -733,7 +766,7 @@ SET default_table_access_method = "heap";
 
 CREATE TABLE IF NOT EXISTS "public"."appointments" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
+    "player_id" "uuid" NOT NULL,
     "date" "date" NOT NULL,
     "time" time without time zone NOT NULL,
     "status" "text" DEFAULT 'confirmed'::"text" NOT NULL,
@@ -759,7 +792,7 @@ ALTER TABLE "public"."appointments" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."cancellation_tokens" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
+    "player_id" "uuid" NOT NULL,
     "category" "text" NOT NULL,
     "issued_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "expires_at" timestamp with time zone DEFAULT ("now"() + '1 mon'::interval) NOT NULL,
@@ -771,6 +804,32 @@ CREATE TABLE IF NOT EXISTS "public"."cancellation_tokens" (
 
 
 ALTER TABLE "public"."cancellation_tokens" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."players" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "parent_id" "uuid" NOT NULL,
+    "name" "text" DEFAULT ''::"text" NOT NULL,
+    "birth_date" "date",
+    "level" "text",
+    "player_type" "text",
+    "can_book_individual" boolean DEFAULT false NOT NULL,
+    "can_book_gruppe" boolean DEFAULT false NOT NULL,
+    "can_book_athletik" boolean DEFAULT false NOT NULL,
+    "can_book_torhueter_individual" boolean DEFAULT false NOT NULL,
+    "can_book_torhueter_gruppe" boolean DEFAULT false NOT NULL,
+    "skip_group_age_level_check" boolean DEFAULT false NOT NULL,
+    "location" "text",
+    "player_number" integer,
+    "is_active" boolean DEFAULT true NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "players_level_check" CHECK ((("level" IS NULL) OR ("level" = ANY (ARRAY['anfaenger'::"text", 'amateur'::"text", 'profi'::"text", 'experte'::"text"])))),
+    CONSTRAINT "players_location_chk" CHECK ((("location" IS NULL) OR ("location" = ANY (ARRAY['Rüsselsheim'::"text", 'Kelsterbach'::"text"])))),
+    CONSTRAINT "players_player_type_check" CHECK ((("player_type" IS NULL) OR ("player_type" = ANY (ARRAY['torwart'::"text", 'feldspieler'::"text"]))))
+);
+
+
+ALTER TABLE "public"."players" OWNER TO "postgres";
 
 
 CREATE SEQUENCE IF NOT EXISTS "public"."customer_number_seq"
@@ -881,6 +940,16 @@ ALTER TABLE ONLY "public"."cancellation_tokens"
 
 
 
+ALTER TABLE ONLY "public"."players"
+    ADD CONSTRAINT "players_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."players"
+    ADD CONSTRAINT "players_player_number_key" UNIQUE ("player_number");
+
+
+
 ALTER TABLE ONLY "public"."notifications"
     ADD CONSTRAINT "notifications_pkey" PRIMARY KEY ("id");
 
@@ -931,7 +1000,7 @@ CREATE INDEX "idx_appointments_trainer_id" ON "public"."appointments" USING "btr
 
 
 
-CREATE INDEX "idx_appointments_user_date_status" ON "public"."appointments" USING "btree" ("user_id", "date", "status");
+CREATE INDEX "idx_appointments_player_date_status" ON "public"."appointments" USING "btree" ("player_id", "date", "status");
 
 
 
@@ -943,7 +1012,11 @@ CREATE UNIQUE INDEX "idx_tokens_unique_source" ON "public"."cancellation_tokens"
 
 
 
-CREATE INDEX "idx_tokens_user_active" ON "public"."cancellation_tokens" USING "btree" ("user_id", "used_at", "expires_at");
+CREATE INDEX "idx_tokens_player_active" ON "public"."cancellation_tokens" USING "btree" ("player_id", "used_at", "expires_at");
+
+
+
+CREATE INDEX "idx_players_parent_id" ON "public"."players" USING "btree" ("parent_id");
 
 
 
@@ -964,6 +1037,10 @@ CREATE INDEX "idx_trainer_videos_trainer_id" ON "public"."trainer_videos" USING 
 
 
 CREATE OR REPLACE TRIGGER "assign_customer_number_trigger" BEFORE INSERT ON "public"."profiles" FOR EACH ROW EXECUTE FUNCTION "public"."assign_customer_number"();
+
+
+
+CREATE OR REPLACE TRIGGER "assign_player_number_trigger" BEFORE INSERT ON "public"."players" FOR EACH ROW EXECUTE FUNCTION "public"."assign_player_number"();
 
 
 
@@ -993,7 +1070,7 @@ ALTER TABLE ONLY "public"."appointments"
 
 
 ALTER TABLE ONLY "public"."appointments"
-    ADD CONSTRAINT "appointments_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "appointments_player_id_fkey" FOREIGN KEY ("player_id") REFERENCES "public"."players"("id") ON DELETE CASCADE;
 
 
 
@@ -1003,7 +1080,12 @@ ALTER TABLE ONLY "public"."cancellation_tokens"
 
 
 ALTER TABLE ONLY "public"."cancellation_tokens"
-    ADD CONSTRAINT "cancellation_tokens_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "cancellation_tokens_player_id_fkey" FOREIGN KEY ("player_id") REFERENCES "public"."players"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."players"
+    ADD CONSTRAINT "players_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
 
 
 
@@ -1043,11 +1125,30 @@ CREATE POLICY "appointments_insert" ON "public"."appointments" FOR INSERT TO "au
 
 
 
-CREATE POLICY "appointments_select" ON "public"."appointments" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR (( SELECT "auth"."uid"() AS "uid") = "user_id") OR (("trainer_id" IS NOT NULL) AND (( SELECT "auth"."uid"() AS "uid") = "trainer_id"))));
+CREATE POLICY "appointments_select" ON "public"."appointments" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR ("player_id" IN ( SELECT "id" FROM "public"."players" WHERE ("parent_id" = ( SELECT "auth"."uid"() AS "uid")))) OR (("trainer_id" IS NOT NULL) AND (( SELECT "auth"."uid"() AS "uid") = "trainer_id"))));
 
 
 
 CREATE POLICY "appointments_update" ON "public"."appointments" FOR UPDATE TO "authenticated" USING (( SELECT "public"."is_admin"() AS "is_admin")) WITH CHECK (( SELECT "public"."is_admin"() AS "is_admin"));
+
+
+
+ALTER TABLE "public"."players" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "players_select" ON "public"."players" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR ("parent_id" = ( SELECT "auth"."uid"() AS "uid")) OR (EXISTS ( SELECT 1 FROM "public"."profiles" "p" WHERE (("p"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("p"."role" = 'trainer'::"text"))))));
+
+
+
+CREATE POLICY "players_insert" ON "public"."players" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "public"."is_admin"() AS "is_admin"));
+
+
+
+CREATE POLICY "players_update" ON "public"."players" FOR UPDATE TO "authenticated" USING (( SELECT "public"."is_admin"() AS "is_admin")) WITH CHECK (( SELECT "public"."is_admin"() AS "is_admin"));
+
+
+
+CREATE POLICY "players_delete" ON "public"."players" FOR DELETE TO "authenticated" USING (( SELECT "public"."is_admin"() AS "is_admin"));
 
 
 
@@ -1104,7 +1205,7 @@ CREATE POLICY "tokens_insert" ON "public"."cancellation_tokens" FOR INSERT TO "a
 
 
 
-CREATE POLICY "tokens_select" ON "public"."cancellation_tokens" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR (( SELECT "auth"."uid"() AS "uid") = "user_id")));
+CREATE POLICY "tokens_select" ON "public"."cancellation_tokens" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR ("player_id" IN ( SELECT "id" FROM "public"."players" WHERE ("parent_id" = ( SELECT "auth"."uid"() AS "uid"))))));
 
 
 
@@ -1156,6 +1257,10 @@ ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."appointments";
 
 
 ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."trainer_schedules";
+
+
+
+ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."players";
 
 
 
@@ -1347,15 +1452,16 @@ GRANT ALL ON FUNCTION "public"."assign_customer_number"() TO "service_role";
 
 
 
-REVOKE ALL ON FUNCTION "public"."book_with_token"("p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."book_with_token"("p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."book_with_token"("p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text") TO "service_role";
+REVOKE ALL ON FUNCTION "public"."assign_player_number"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."assign_player_number"() TO "anon";
+GRANT ALL ON FUNCTION "public"."assign_player_number"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."assign_player_number"() TO "service_role";
 
 
 
-REVOKE ALL ON FUNCTION "public"."book_with_token"("p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."book_with_token"("p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."book_with_token"("p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text") TO "service_role";
+REVOKE ALL ON FUNCTION "public"."book_with_token"("p_player_id" "uuid", "p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."book_with_token"("p_player_id" "uuid", "p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."book_with_token"("p_player_id" "uuid", "p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text") TO "service_role";
 
 
 
@@ -1480,6 +1586,12 @@ GRANT ALL ON TABLE "public"."appointments" TO "service_role";
 GRANT ALL ON TABLE "public"."cancellation_tokens" TO "anon";
 GRANT ALL ON TABLE "public"."cancellation_tokens" TO "authenticated";
 GRANT ALL ON TABLE "public"."cancellation_tokens" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."players" TO "anon";
+GRANT ALL ON TABLE "public"."players" TO "authenticated";
+GRANT ALL ON TABLE "public"."players" TO "service_role";
 
 
 
