@@ -914,7 +914,7 @@ ALTER TABLE "public"."trainer_videos" OWNER TO "postgres";
 CREATE OR REPLACE VIEW "public"."v_trainer_monthly_counts" WITH ("security_invoker"='on') AS
  SELECT "trainer_id",
     "to_char"(("date")::timestamp with time zone, 'YYYY-MM'::"text") AS "year_month",
-    ("count"(*))::integer AS "sessions"
+    ("count"(DISTINCT ("date", "time")))::integer AS "sessions"
    FROM "public"."appointments"
   WHERE (("status" = 'confirmed'::"text") AND ("date" < CURRENT_DATE) AND ("trainer_id" IS NOT NULL))
   GROUP BY "trainer_id", ("to_char"(("date")::timestamp with time zone, 'YYYY-MM'::"text"));
