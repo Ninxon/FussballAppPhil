@@ -386,13 +386,10 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
     const activeToken = effectiveCategory === 'individual' ? tokenIndividual
       : effectiveCategory === 'gruppe' ? tokenGruppe
       : (tokenIndividual ?? tokenGruppe);
-    // Use expires_at directly (set by DB: one month after the cancelled
-    // appointment's date) to match the hook validation.
-    const tokenMaxDate = activeToken ? new Date(activeToken.expires_at) : null;
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const tokenMaxStr = tokenMaxDate
-      ? `${tokenMaxDate.getFullYear()}-${pad(tokenMaxDate.getMonth() + 1)}-${pad(tokenMaxDate.getDate())}`
-      : null;
+    // Fristdatum direkt aus dem UTC-Datumsteil von expires_at (= exakt 1 Monat
+    // nach dem stornierten Termin, DST-sicher). NICHT new Date(...).toLocale… /
+    // getDate() verwenden — das verschiebt in Berlin (UTC+1/+2) auf den Folgetag.
+    const tokenMaxStr = activeToken ? activeToken.expires_at.slice(0, 10) : null;
 
     return (
       <FadeUp>
@@ -447,10 +444,10 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
             </View>
           </View>
         </Card>
-        {tokenMaxDate && (
+        {tokenMaxStr && (
           <View style={styles.tokenDeadlineHint}>
             <Text style={styles.tokenDeadlineText}>
-              ⏳ Nachholtermin muss bis {tokenMaxDate.toLocaleDateString('de-DE')} gebucht werden
+              ⏳ Nachholtermin muss bis {fmtDate(tokenMaxStr)} gebucht werden
             </Text>
           </View>
         )}

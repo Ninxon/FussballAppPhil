@@ -18,9 +18,14 @@ interface Props {
 }
 
 function daysUntil(isoDate: string): number {
+  // Auf Kalendertag-Basis rechnen, passend zum angezeigten „Gültig bis"-Datum.
+  // expires_at ist Berlin-Mitternacht, in UTC gespeichert (z. B. 22:00Z) — der
+  // Roh-Zeitstempel + Math.ceil würde die Tageszahl sonst um eins verfälschen.
+  const [y, m, d] = isoDate.slice(0, 10).split('-').map(Number);
+  const target = new Date(y, m - 1, d);
   const now = new Date();
-  const target = new Date(isoDate);
-  return Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((target.getTime() - today.getTime()) / 86400000);
 }
 
 const PROGRAM_COLORS: Record<string, string> = {

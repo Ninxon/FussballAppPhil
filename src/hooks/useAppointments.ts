@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Appointment, CancellationToken, ProgramCategory, SlotCount, SlotPlayer, Player } from '../types';
 import { PROGRAM_CATEGORY, ProgramId } from '../constants/programs';
 import { checkDailyConflict, checkProgramPermission } from '../utils/bookingRules';
+import { fmtDate } from '../constants/i18n';
 import { AppointmentService } from '../services/appointmentService';
 import { TokenService } from '../services/tokenService';
 import { EmailService } from '../services/emailService';
@@ -208,11 +209,12 @@ export function useAppointments(activePlayer: Player | null) {
       return { error: { message: 'Nachholtermine können nur mit einem gültigen Stornierungstoken gebucht werden.' } };
     }
 
-    // Use the token's own expires_at (set by the DB: one month after the
-    // cancelled appointment's date) rather than recalculating here.
-    const maxDate = new Date(activeToken.expires_at);
-    if (new Date(date + 'T12:00:00') > maxDate) {
-      return { error: { message: `Nachholtermin muss bis ${maxDate.toLocaleDateString('de-DE')} gebucht werden.` } };
+    // expires_at.slice(0,10) = UTC-Datumsteil = exakt 1 Monat nach dem
+    // stornierten Termin (DST-sicher). Tagesgenauer String-Vergleich; new Date(...)
+    // + toLocaleDateString würde in Berlin auf den Folgetag verschieben.
+    const maxDateStr = activeToken.expires_at.slice(0, 10);
+    if (date > maxDateStr) {
+      return { error: { message: `Nachholtermin muss bis ${fmtDate(maxDateStr)} gebucht werden.` } };
     }
 
     const permCheck = checkProgramPermission(activePlayer, program as ProgramId);
