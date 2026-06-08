@@ -72,16 +72,25 @@ export function germanHolidays(year: number): Set<string> {
   const s = (dt: Date) =>
     `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
   return new Set([
-    `${year}-01-01`,
-    s(add(e, -2)),
-    s(add(e, 1)),
-    `${year}-05-01`,
-    s(add(e, 39)),
-    s(add(e, 50)),
-    `${year}-10-03`,
-    `${year}-12-25`,
-    `${year}-12-26`,
+    `${year}-01-01`,   // Neujahr
+    s(add(e, -2)),     // Karfreitag
+    s(add(e, 1)),      // Ostermontag
+    `${year}-05-01`,   // Tag der Arbeit
+    s(add(e, 39)),     // Christi Himmelfahrt
+    s(add(e, 50)),     // Pfingstmontag
+    s(add(e, 60)),     // Fronleichnam (Hessen)
+    `${year}-10-03`,   // Tag der Deutschen Einheit
+    `${year}-12-25`,   // 1. Weihnachtstag
+    `${year}-12-26`,   // 2. Weihnachtstag
   ]);
+}
+
+// Zusätzliche gesperrte Zeiträume (z.B. Schulferien), kommen aus blocked_periods.
+export type BlockedPeriod = { start_date: string; end_date: string };
+
+// YYYY-MM-DD-Strings sind lexikografisch vergleichbar -> kein Date-Parsing nötig.
+export function isBlockedByPeriod(dateStr: string, periods: BlockedPeriod[]): boolean {
+  return periods.some(p => dateStr >= p.start_date && dateStr <= p.end_date);
 }
 
 /**
@@ -199,12 +208,13 @@ export function reconstructGroups(
   return groups;
 }
 
-export function isBookableDay(dateStr: string): boolean {
+export function isBookableDay(dateStr: string, blockedPeriods: BlockedPeriod[] = []): boolean {
   // Mittags-Anker, damit YYYY-MM-DD nicht als UTC-Mitternacht geparst wird
   // (sonst kann getDay() in negativen Zeitzonen einen Tag verrutschen).
   const d = new Date(dateStr + 'T12:00:00');
   const dow = d.getDay();
   if (dow === 0 || dow === 6) return false;
   if (germanHolidays(d.getFullYear()).has(dateStr)) return false;
+  if (isBlockedByPeriod(dateStr, blockedPeriods)) return false;
   return true;
 }
