@@ -58,6 +58,34 @@ function fmtDate(iso: string) {
   return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+// Übersetzt die (englischen) Supabase-Auth-Fehler in handlungsleitende Meldungen.
+// Wichtigster Fall: abgelaufene/fehlende Session -> "erneut versuchen" hilft NICHT,
+// der Kunde muss sich neu anmelden.
+function passwordErrorMessage(error: { message?: string; status?: number }): string {
+  const msg = (error?.message ?? '').toLowerCase();
+  const status = error?.status;
+  if (msg.includes('session') || msg.includes('jwt') || msg.includes('not authenticated') ||
+      status === 401 || status === 403) {
+    return 'Deine Sitzung ist abgelaufen. Bitte melde dich ab, neu an und ändere das Passwort dann erneut.';
+  }
+  if (msg.includes('different from the old') || msg.includes('should be different') ||
+      msg.includes('same as') || msg.includes('same_password')) {
+    return 'Das neue Passwort muss sich von deinem bisherigen unterscheiden.';
+  }
+  if (msg.includes('weak') || msg.includes('pwned') || msg.includes('leaked') || msg.includes('compromis')) {
+    return 'Dieses Passwort ist zu unsicher (z. B. weil es bekannt/geleakt ist). Bitte wähle ein anderes.';
+  }
+  if (msg.includes('failed to fetch') || msg.includes('network') || msg.includes('load failed')) {
+    return 'Keine Verbindung zum Server. Bitte prüfe dein Internet und versuche es erneut.';
+  }
+  if (msg.includes('rate') || status === 429) {
+    return 'Zu viele Versuche. Bitte warte einen Moment und versuche es erneut.';
+  }
+  return error?.message
+    ? `Fehler beim Ändern: ${error.message}`
+    : 'Fehler beim Ändern. Bitte erneut versuchen.';
+}
+
 export function ProfilScreen({ onLogout, players }: Props) {
   const insets = useSafeAreaInsets();
   const { C, isDark, toggleTheme } = useTheme();
@@ -94,10 +122,27 @@ export function ProfilScreen({ onLogout, players }: Props) {
     if (newPw !== confirmPw) { setPwErr('Passwörter stimmen nicht überein.'); return; }
     setPwErr('');
     setPwLoading(true);
+
+    // Häufigste Ursache für "Fehler beim Ändern": die lokale Session ist abgelaufen
+    // (Web-Cookie gilt ohne "Angemeldet bleiben" nur 8 h). Dann scheitert updateUser
+    // CLIENTSEITIG, ohne die Auth-API zu erreichen. Daher Session vorab sicherstellen.
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      const { error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) {
+        console.error('[ProfilScreen] Session-Refresh fehlgeschlagen:', refreshError);
+        setPwLoading(false);
+        setPwErr('Deine Sitzung ist abgelaufen. Bitte melde dich ab, neu an und ändere das Passwort dann erneut.');
+        return;
+      }
+    }
+
     const { error } = await supabase.auth.updateUser({ password: newPw });
     setPwLoading(false);
     if (error) {
-      setPwErr('Fehler beim Ändern. Bitte erneut versuchen.');
+      // Echte Ursache fürs Debugging festhalten, dem Kunden eine klare Meldung zeigen.
+      console.error('[ProfilScreen] Passwort ändern fehlgeschlagen:', error);
+      setPwErr(passwordErrorMessage(error));
     } else {
       setNewPw('');
       setConfirmPw('');
