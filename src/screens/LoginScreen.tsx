@@ -4,6 +4,7 @@ import {
   Animated, Easing, KeyboardAvoidingView, Platform, ScrollView, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase, setRememberMe } from '../lib/supabase';
@@ -95,6 +96,22 @@ function getStyles(C: Colors) {
     inputErr: {
       borderColor: C.red,
       backgroundColor: C.redBg,
+    },
+    pwWrap: {
+      position: 'relative',
+      justifyContent: 'center',
+    },
+    pwInput: {
+      paddingRight: 52,
+    },
+    pwToggle: {
+      position: 'absolute',
+      right: 0,
+      top: 0,
+      bottom: 0,
+      width: 52,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     errText: {
       fontSize: 13,
@@ -254,6 +271,7 @@ export function LoginScreen({ onLogin }: Props) {
 
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMeState] = useState(false);
@@ -440,14 +458,25 @@ export function LoginScreen({ onLogin }: Props) {
 
                 <View style={[styles.fieldWrap, { marginBottom: 18 }]}>
                   <Text style={styles.fieldLabel}>Passwort</Text>
-                  <TextInput
-                    style={[styles.input, pwErr && styles.inputErr]}
-                    value={pw}
-                    onChangeText={v => { setPw(v); setErr(''); }}
-                    placeholder="••••••••"
-                    placeholderTextColor={C.textFaint}
-                    secureTextEntry
-                  />
+                  <View style={styles.pwWrap}>
+                    <TextInput
+                      style={[styles.input, styles.pwInput, pwErr && styles.inputErr]}
+                      value={pw}
+                      onChangeText={v => { setPw(v); setErr(''); }}
+                      placeholder="••••••••"
+                      placeholderTextColor={C.textFaint}
+                      secureTextEntry={!showPw}
+                    />
+                    <TouchableOpacity
+                      style={styles.pwToggle}
+                      onPress={() => setShowPw(v => !v)}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={showPw ? 'Passwort verbergen' : 'Passwort anzeigen'}
+                    >
+                      <Feather name={showPw ? 'eye-off' : 'eye'} size={20} color={C.textFaint} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 <TouchableOpacity
