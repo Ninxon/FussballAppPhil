@@ -19,6 +19,11 @@ export const TokenService = {
   insert: (data: TokenInsert) =>
     supabase.from('cancellation_tokens').insert(data).select('*').single(),
 
+  // Admin vergibt manuell einen Nachhol-Gutschein (ohne Storno). RLS: nur Admin.
+  // source_appointment_id bleibt NULL, makeup_count = 0 (Spalten-Default).
+  grant: (data: { player_id: string; category: 'individual' | 'gruppe'; expires_at: string }) =>
+    supabase.from('cancellation_tokens').insert(data).select('*').single(),
+
   markUsed: (id: string) =>
     supabase
       .from('cancellation_tokens')

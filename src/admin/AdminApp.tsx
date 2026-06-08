@@ -44,7 +44,7 @@ export function AdminApp({ onLogout }: Props) {
     cancelAppointment, addAppointmentForCustomer, addRecurringAppointments,
     createCustomer, deleteCustomer,
     saveCustomerLevel, saveBookingPermissions, saveCustomerProfile, saveGroupCompatExempt,
-    saveCustomerEmail, toggleCustomerActive, resetCustomerTokens,
+    saveCustomerEmail, toggleCustomerActive, resetCustomerTokens, grantCustomerToken,
     setScheduleSlot, createTrainer, updateTrainer, deleteTrainer,
     markAttended,
   } = useAdminData();
@@ -135,6 +135,7 @@ export function AdminApp({ onLogout }: Props) {
           onSaveEmail={saveCustomerEmail}
           onToggleActive={toggleCustomerActive}
           onResetTokens={resetCustomerTokens}
+          onGrantToken={grantCustomerToken}
           onMarkAttended={markAttended}
           onDeleteCustomer={async (id) => {
             const { error } = await deleteCustomer(id);
