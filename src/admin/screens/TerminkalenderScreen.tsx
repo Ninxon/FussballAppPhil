@@ -7,6 +7,7 @@ import { CustomerProfile, AdminAppointment, TrainerProfile } from '../hooks/useA
 import { PROGRAMS, PROGRAM_CATEGORY, ProgramId } from '../../constants/programs';
 import { SLOTS } from '../../constants/slots';
 import { isBookableDay } from '../../utils/bookingRules';
+import { useBlockedPeriods } from '../../hooks/useBlockedPeriods';
 
 // ─── Design tokens ───────────────────────────────────────────────────────────
 const C = {
@@ -94,6 +95,7 @@ export function TerminkalenderScreen({
 }: Props) {
   const todayStr = dateStr(new Date());
   const { width: winW } = useWindowDimensions();
+  const blockedPeriods = useBlockedPeriods();
 
   const [viewMode,        setViewMode]        = useState<'week'|'day'>(initialDay ? 'day' : 'week');
   const [dayDate,         setDayDate]         = useState(initialDay ?? todayStr);
@@ -376,7 +378,7 @@ export function TerminkalenderScreen({
       .sort((a, b) => a.time.localeCompare(b.time));
 
     const isPast = dayDate < todayStr;
-    const canBook = !isPast && isBookableDay(dayDate);
+    const canBook = !isPast && isBookableDay(dayDate, blockedPeriods);
 
     const cols = trainers as TrainerProfile[];
     const numCols = cols.length || 1;
@@ -560,7 +562,7 @@ export function TerminkalenderScreen({
                   const isToday  = ds === todayStr;
                   const isPast   = ds < todayStr;
                   const isWeekend= i >= 5;
-                  const canBook  = !isPast && isBookableDay(ds);
+                  const canBook  = !isPast && isBookableDay(ds, blockedPeriods);
                   const count    = allAppointments.filter(a => a.date === ds && a.status === 'confirmed').length;
 
                   return (

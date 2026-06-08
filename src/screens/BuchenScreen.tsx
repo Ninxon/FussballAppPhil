@@ -14,7 +14,8 @@ import { Appointment, SlotCount, SlotPlayer, CancellationToken, Tab, TrainerSche
 import { todayStr, fmtDate, fmtShort, DE_MONTHS, DE_DAYS_SHORT } from '../constants/i18n';
 import { PROGRAMS, PROGRAM_CATEGORY, CATEGORY_COLORS, ProgramId } from '../constants/programs';
 import { PROGRAM_IMAGES } from '../constants/programImages';
-import { germanHolidays, canJoinGroupSlot, reconstructGroups } from '../utils/bookingRules';
+import { germanHolidays, canJoinGroupSlot, reconstructGroups, isBlockedByPeriod } from '../utils/bookingRules';
+import { useBlockedPeriods } from '../hooks/useBlockedPeriods';
 import { LOCATIONS, Location } from '../constants/studio';
 
 const LOC_COLOR: Record<Location, string> = { 'Rüsselsheim': '#4A8FE8', 'Kelsterbach': '#5A8C6A' };
@@ -165,6 +166,7 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
   }, [step]);
 
   const ts = todayStr();
+  const blockedPeriods = useBlockedPeriods();
   const stepIdx = STEPS.indexOf(step);
   const currentProgram = PROGRAMS.find(p => p.id === selProgram);
 
@@ -421,11 +423,12 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
                 const isPast = ds < ts;
                 const isWeekend = dow === 0 || dow === 6;
                 const isHoliday = germanHolidays(calY).has(ds);
+                const isBlocked = isBlockedByPeriod(ds, blockedPeriods);
                 const isAfterDeadline = tokenMaxStr ? ds > tokenMaxStr : false;
                 const isUserBooked = myAppointments.some(a => a.date === ds && a.status === 'confirmed');
                 const isSel = selDate === ds;
                 const isToday = ds === ts;
-                const disabled = isPast || isWeekend || isHoliday || isAfterDeadline;
+                const disabled = isPast || isWeekend || isHoliday || isBlocked || isAfterDeadline;
                 return (
                   <TouchableOpacity
                     key={`day-${i}`}

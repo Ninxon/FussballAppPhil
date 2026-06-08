@@ -4,6 +4,7 @@ import {
   easterDate,
   germanHolidays,
   isBookableDay,
+  isBlockedByPeriod,
 } from '../utils/bookingRules';
 
 // ── Tages-Konflikt ───────────────────────────────────────────────────────────
@@ -108,8 +109,12 @@ describe('germanHolidays', () => {
     expect(germanHolidays(2026).has('2026-05-01')).toBe(true);
   });
 
-  test('enthält genau 9 Feiertage', () => {
-    expect(germanHolidays(2026).size).toBe(9);
+  test('enthält Fronleichnam (Hessen) 2026', () => {
+    expect(germanHolidays(2026).has('2026-06-04')).toBe(true);
+  });
+
+  test('enthält genau 10 Feiertage (inkl. Fronleichnam)', () => {
+    expect(germanHolidays(2026).size).toBe(10);
   });
 });
 
@@ -132,5 +137,41 @@ describe('isBookableDay', () => {
     expect(isBookableDay('2026-01-01')).toBe(false);
     expect(isBookableDay('2026-12-25')).toBe(false);
     expect(isBookableDay('2026-04-06')).toBe(false);
+  });
+
+  test('Tag in gesperrtem Zeitraum (Schulferien) ist nicht buchbar', () => {
+    const periods = [{ start_date: '2026-06-29', end_date: '2026-08-07' }];
+    // 2026-07-15 ist ein Mittwoch in den Sommerferien
+    expect(isBookableDay('2026-07-15', periods)).toBe(false);
+    // ein Werktag außerhalb der Ferien bleibt buchbar
+    expect(isBookableDay('2026-05-04', periods)).toBe(true);
+  });
+});
+
+// ── Gesperrte Zeiträume ──────────────────────────────────────────────────────
+
+describe('isBlockedByPeriod', () => {
+  const periods = [
+    { start_date: '2026-06-29', end_date: '2026-08-07' },
+    { start_date: '2026-12-23', end_date: '2027-01-12' },
+  ];
+
+  test('Datum innerhalb eines Zeitraums (inkl. Grenzen)', () => {
+    expect(isBlockedByPeriod('2026-06-29', periods)).toBe(true);
+    expect(isBlockedByPeriod('2026-08-07', periods)).toBe(true);
+    expect(isBlockedByPeriod('2026-07-15', periods)).toBe(true);
+  });
+
+  test('jahresübergreifender Zeitraum', () => {
+    expect(isBlockedByPeriod('2027-01-05', periods)).toBe(true);
+  });
+
+  test('Datum außerhalb aller Zeiträume', () => {
+    expect(isBlockedByPeriod('2026-08-08', periods)).toBe(false);
+    expect(isBlockedByPeriod('2026-06-28', periods)).toBe(false);
+  });
+
+  test('leere Liste blockiert nichts', () => {
+    expect(isBlockedByPeriod('2026-07-15', [])).toBe(false);
   });
 });
