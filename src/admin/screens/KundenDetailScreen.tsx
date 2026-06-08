@@ -46,6 +46,7 @@ interface Props {
   onSaveEmail: (customerId: string, email: string) => Promise<{ error: { message: string } | null }>;
   onToggleActive: (customerId: string, isActive: boolean) => Promise<{ error: any }>;
   onResetTokens: (customerId: string) => Promise<{ error: any }>;
+  onGrantToken: (customerId: string, category: 'individual' | 'gruppe', expiresDate: string) => Promise<{ error: any }>;
   onMarkAttended: (apptId: string, attended: boolean | null) => Promise<{ error: any }>;
   onDeleteCustomer: (id: string) => Promise<{ error: string | null }>;
 }
@@ -135,9 +136,16 @@ export function KundenDetailScreen({
   customer, appointments, trainers, tokenCounts,
   onBack, onCancelAppointment, onAddAppointment, onAddRecurring,
   onSaveLevel, onSaveBookingPermissions, onSaveGroupExempt, onSaveProfile, onSaveEmail,
-  onToggleActive, onResetTokens, onMarkAttended, onDeleteCustomer,
+  onToggleActive, onResetTokens, onGrantToken, onMarkAttended, onDeleteCustomer,
 }: Props) {
   const ts = todayStr();
+
+  // Standard-Ablaufdatum für manuell vergebene Gutscheine: heute + 1 Monat.
+  const defaultGrantExpiry = (() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
 
   const birthYear = customer.birth_date ? parseInt(customer.birth_date.slice(0, 4)) : null;
 
@@ -186,6 +194,14 @@ export function KundenDetailScreen({
   const [showTokenReset, setShowTokenReset] = useState(false);
   const [tokenResetLoading, setTokenResetLoading] = useState(false);
   const [tokenResetError, setTokenResetError] = useState<string | null>(null);
+
+  // Nachholtermin / Gutschein manuell vergeben
+  const [showGrant, setShowGrant] = useState(false);
+  const [grantCategory, setGrantCategory] = useState<'individual' | 'gruppe'>('individual');
+  const [grantExpiry, setGrantExpiry] = useState(defaultGrantExpiry);
+  const [grantLoading, setGrantLoading] = useState(false);
+  const [grantError, setGrantError] = useState<string | null>(null);
+  const [grantSuccess, setGrantSuccess] = useState(false);
 
   // Löschen
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -327,6 +343,22 @@ export function KundenDetailScreen({
     setTokenResetLoading(false);
     if (error) setTokenResetError((error as any).message ?? 'Fehler beim Zurücksetzen.');
     else setShowTokenReset(false);
+  };
+
+  const doGrantToken = async () => {
+    setGrantLoading(true);
+    setGrantError(null);
+    setGrantSuccess(false);
+    const { error } = await onGrantToken(customer.id, grantCategory, grantExpiry.trim());
+    setGrantLoading(false);
+    if (error) {
+      setGrantError((error as any).message ?? 'Fehler beim Vergeben.');
+    } else {
+      setGrantSuccess(true);
+      setShowGrant(false);
+      setGrantExpiry(defaultGrantExpiry);
+      setGrantCategory('individual');
+    }
   };
 
   const doDelete = async () => {
@@ -574,6 +606,74 @@ export function KundenDetailScreen({
             <Text style={styles.tokenDisplayLabel}>Termine gesamt</Text>
           </View>
         </View>
+
+        {grantSuccess && !showGrant && (
+          <Text style={styles.grantSuccessText}>✓ Nachholtermin vergeben. Der Kunde kann ihn jetzt buchen.</Text>
+        )}
+
+        {showGrant ? (
+          <View style={styles.formSection}>
+            <Text style={styles.grantTitle}>Nachholtermin geben</Text>
+            <Text style={styles.grantSub}>
+              {customer.full_name} erhält einen Gutschein und bucht den Slot selbst (Tag, Uhrzeit und Standort wählt der Kunde).
+            </Text>
+
+            <Text style={styles.fieldLabel}>Kategorie</Text>
+            <View style={styles.programRow}>
+              <TouchableOpacity
+                style={[styles.programChip, grantCategory === 'individual' && styles.programChipActive]}
+                onPress={() => setGrantCategory('individual')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.programChipText, grantCategory === 'individual' && styles.programChipTextActive]}>Einzeltraining</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.programChip, grantCategory === 'gruppe' && styles.programChipActive]}
+                onPress={() => setGrantCategory('gruppe')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.programChipText, grantCategory === 'gruppe' && styles.programChipTextActive]}>Gruppentraining</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.fieldLabel}>Gültig bis (YYYY-MM-DD)</Text>
+            <TextInput
+              style={styles.input}
+              value={grantExpiry}
+              onChangeText={setGrantExpiry}
+              placeholder={defaultGrantExpiry}
+              placeholderTextColor="#7A90AE"
+            />
+
+            {grantError && <Text style={styles.fieldError}>{grantError}</Text>}
+
+            <View style={styles.tokenResetBtns}>
+              <TouchableOpacity
+                style={[styles.saveBtn, { flex: 1 }, grantLoading && { opacity: 0.6 }]}
+                onPress={doGrantToken}
+                disabled={grantLoading}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.saveBtnText}>{grantLoading ? 'Wird vergeben...' : 'Gutschein vergeben'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.tokenResetNo}
+                onPress={() => { setShowGrant(false); setGrantError(null); }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.tokenResetNoText}>Abbrechen</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.grantBtn}
+            onPress={() => { setShowGrant(true); setGrantError(null); setGrantSuccess(false); }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.grantBtnText}>+ Nachholtermin geben</Text>
+          </TouchableOpacity>
+        )}
 
         {((tokenCounts?.individual ?? 0) + (tokenCounts?.gruppe ?? 0)) > 0 && (
           showTokenReset ? (
@@ -915,6 +1015,11 @@ const styles = StyleSheet.create({
   tokenResetYesText: { fontSize: 14, fontWeight: '700', color: '#fff' },
   tokenResetNo: { flex: 1, backgroundColor: 'rgba(21,34,56,0.06)', borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
   tokenResetNoText: { fontSize: 14, fontWeight: '600', color: '#4A6080' },
+  grantBtn: { marginTop: 14, alignSelf: 'flex-start', backgroundColor: 'rgba(90,140,106,0.1)', borderRadius: 8, paddingVertical: 9, paddingHorizontal: 16, borderWidth: 1, borderColor: 'rgba(90,140,106,0.3)' },
+  grantBtnText: { fontSize: 13, fontWeight: '700', color: '#5A8C6A' },
+  grantTitle: { fontSize: 14, fontWeight: '800', color: '#152238', marginBottom: 4 },
+  grantSub: { fontSize: 13, color: '#4A6080', lineHeight: 19, marginBottom: 12 },
+  grantSuccessText: { fontSize: 13, fontWeight: '600', color: '#15803D', marginTop: 12 },
   activeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#EEF3FB', marginBottom: 4 },
   activeRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   statusDot: { width: 9, height: 9, borderRadius: 5 },

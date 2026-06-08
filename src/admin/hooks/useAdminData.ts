@@ -488,6 +488,29 @@ export function useAdminData() {
     return { error };
   };
 
+  // Vergibt einem Spieler manuell einen Nachhol-Gutschein (Token) mit gewähltem
+  // Ablaufdatum. expiresDate = 'YYYY-MM-DD' -> gültig bis Ende dieses Tages.
+  const grantCustomerToken = async (
+    customerId: string, category: 'individual' | 'gruppe', expiresDate: string,
+  ) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(expiresDate)) {
+      return { error: { message: 'Ablaufdatum im Format YYYY-MM-DD angeben.' } };
+    }
+    // Bis Tagesende (lokal), damit der gewählte Tag noch voll nutzbar ist.
+    const expires_at = new Date(`${expiresDate}T23:59:59`).toISOString();
+    if (isNaN(new Date(expires_at).getTime())) {
+      return { error: { message: 'Ungültiges Ablaufdatum.' } };
+    }
+    const { error } = await TokenService.grant({ player_id: customerId, category, expires_at });
+    if (!error) {
+      setActiveTokensByCustomer(prev => {
+        const cur = prev[customerId] ?? { individual: 0, gruppe: 0 };
+        return { ...prev, [customerId]: { ...cur, [category]: cur[category] + 1 } };
+      });
+    }
+    return { error };
+  };
+
   // location = null entfernt den Slot; ein Standort legt ihn an bzw. ändert
   // den Standort eines bestehenden Slots (ein Standort pro Trainer-Slot).
   // Bei Standort-Wechsel zieht ein DB-Trigger zukünftige Termine mit; danach
@@ -599,7 +622,7 @@ export function useAdminData() {
     cancelAppointment, addAppointmentForCustomer, addRecurringAppointments,
     createCustomer, deleteCustomer,
     saveCustomerLevel, saveBookingPermissions, saveCustomerProfile, saveGroupCompatExempt,
-    saveCustomerEmail, toggleCustomerActive, resetCustomerTokens,
+    saveCustomerEmail, toggleCustomerActive, resetCustomerTokens, grantCustomerToken,
     setScheduleSlot, createTrainer, updateTrainer, deleteTrainer,
     markAttended,
     reload: load,
