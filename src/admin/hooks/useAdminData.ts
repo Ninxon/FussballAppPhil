@@ -48,6 +48,7 @@ export type AdminAppointment = {
   session_birth_year?: number | null;
   attended?: boolean | null;
   location?: string | null;
+  short_notice_cancel?: boolean | null;
 };
 
 export type TrainerProfile = {

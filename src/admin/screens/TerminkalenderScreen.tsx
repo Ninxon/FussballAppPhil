@@ -377,6 +377,10 @@ export function TerminkalenderScreen({
       .filter(a => a.date === dayDate && a.status === 'confirmed')
       .sort((a, b) => a.time.localeCompare(b.time));
 
+    const dayCancels = allAppointments.filter(
+      a => a.date === dayDate && a.status === 'cancelled' && a.short_notice_cancel,
+    );
+
     const isPast = dayDate < todayStr;
     const canBook = !isPast && isBookableDay(dayDate, blockedPeriods);
 
@@ -414,13 +418,13 @@ export function TerminkalenderScreen({
 
           {bookingDay === dayDate && bookingPanel}
 
-          {dayAppts.length === 0 && !bookingDay && (
+          {dayAppts.length === 0 && dayCancels.length === 0 && !bookingDay && (
             <View style={s.emptyState}>
               <Text style={s.emptyText}>Keine bestätigten Termine</Text>
             </View>
           )}
 
-          {dayAppts.length > 0 && (
+          {(dayAppts.length > 0 || dayCancels.length > 0) && (
             <View style={s.gridCard}>
               <ScrollView horizontal={colW === 150} showsHorizontalScrollIndicator>
                 <View>
@@ -453,6 +457,7 @@ export function TerminkalenderScreen({
                       </View>
                       {cols.map(t => {
                         const cellAppts = dayAppts.filter(a => a.trainer_id === t.id && a.time === slot);
+                        const cellCancels = dayCancels.filter(a => a.trainer_id === t.id && a.time === slot);
                         return (
                           <View key={t.id} style={[dg.cell, { width: colW }]}>
                             {cellAppts.map(a => {
@@ -472,6 +477,15 @@ export function TerminkalenderScreen({
                                     {cust?.full_name ?? '—'}
                                   </Text>
                                 </TouchableOpacity>
+                              );
+                            })}
+                            {cellCancels.map(a => {
+                              const cust = customers.find(c => c.id === a.player_id);
+                              return (
+                                <View key={a.id} style={dg.cancelTag}>
+                                  <Text style={dg.cancelTagLabel} numberOfLines={1}>⚠ Kurzfristig storniert</Text>
+                                  <Text style={dg.cancelTagName} numberOfLines={1}>{cust?.full_name ?? '—'}</Text>
+                                </View>
                               );
                             })}
                           </View>
@@ -564,6 +578,9 @@ export function TerminkalenderScreen({
                   const isWeekend= i >= 5;
                   const canBook  = !isPast && isBookableDay(ds, blockedPeriods);
                   const count    = allAppointments.filter(a => a.date === ds && a.status === 'confirmed').length;
+                  const cancelCount = allAppointments.filter(
+                    a => a.date === ds && a.status === 'cancelled' && a.short_notice_cancel,
+                  ).length;
 
                   return (
                     <TouchableOpacity
@@ -585,6 +602,11 @@ export function TerminkalenderScreen({
                       {count > 0 && (
                         <View style={[wg.countBadge, isToday && wg.countBadgeToday]}>
                           <Text style={[wg.countText, isToday && wg.countTextToday]}>{count}</Text>
+                        </View>
+                      )}
+                      {cancelCount > 0 && (
+                        <View style={wg.cancelBadge}>
+                          <Text style={wg.cancelBadgeText}>⚠ {cancelCount} kurzfristig</Text>
                         </View>
                       )}
                       {canBook && (
@@ -617,6 +639,9 @@ export function TerminkalenderScreen({
                     const isWeekend= i >= 5;
                     const slotAppts= allAppointments.filter(
                       a => a.date === ds && a.time === slot && a.status === 'confirmed'
+                    );
+                    const slotCancels = allAppointments.filter(
+                      a => a.date === ds && a.time === slot && a.status === 'cancelled' && a.short_notice_cancel
                     );
 
                     // Group by program+trainer for groups; individual appointments each get their own block
@@ -680,6 +705,15 @@ export function TerminkalenderScreen({
                                 </Text>
                               )}
                             </TouchableOpacity>
+                          );
+                        })}
+                        {slotCancels.map(a => {
+                          const cust = customers.find(c => c.id === a.player_id);
+                          return (
+                            <View key={a.id} style={wg.cancelBlock}>
+                              <Text style={wg.cancelLabel} numberOfLines={1}>⚠ Kurzfristig storniert</Text>
+                              <Text style={wg.cancelName} numberOfLines={1}>{cust?.full_name ?? '—'}</Text>
+                            </View>
                           );
                         })}
                       </View>
@@ -967,6 +1001,15 @@ const dg = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 5,
   },
   apptTagText: { fontSize: 12, fontWeight: '700', flex: 1 },
+
+  // Kurzfrist-Storno-Marker in der Tagesansicht-Zelle
+  cancelTag: {
+    borderLeftWidth: 3, borderLeftColor: C.danger, borderRadius: 6,
+    backgroundColor: 'rgba(239,68,68,0.07)',
+    paddingHorizontal: 8, paddingVertical: 5, gap: 1,
+  },
+  cancelTagLabel: { fontSize: 9, fontWeight: '800', color: C.danger },
+  cancelTagName:  { fontSize: 12, fontWeight: '700', color: C.textMid, textDecorationLine: 'line-through' },
 });
 
 // ─── Styles: Week grid ────────────────────────────────────────────────────────
@@ -1000,6 +1043,10 @@ const wg = StyleSheet.create({
   countBadgeToday: { backgroundColor: 'rgba(255,255,255,0.25)' },
   countText:       { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.8)' },
   countTextToday:  { color: '#fff' },
+
+  // Kurzfrist-Storno-Marker im Tageskopf
+  cancelBadge:     { backgroundColor: 'rgba(239,68,68,0.92)', borderRadius: 9, paddingHorizontal: 6, paddingVertical: 1, marginTop: 3 },
+  cancelBadgeText: { fontSize: 9, fontWeight: '800', color: '#fff' },
 
   // Add button in day header
   addBtn: {
@@ -1044,4 +1091,13 @@ const wg = StyleSheet.create({
   apptMetaSel:  { color: 'rgba(255,255,255,0.85)' },
   apptTrainer:  { fontSize: 11, color: C.textFaint, flexShrink: 1, minWidth: 0 },
   apptTrainerSel:{ color: 'rgba(255,255,255,0.65)' },
+
+  // Kurzfrist-Storno-Marker in der Zelle
+  cancelBlock: {
+    borderLeftWidth: 3, borderLeftColor: C.danger, borderRadius: 8,
+    backgroundColor: 'rgba(239,68,68,0.07)',
+    paddingHorizontal: 10, paddingVertical: 7, gap: 2, alignSelf: 'stretch',
+  },
+  cancelLabel: { fontSize: 10, fontWeight: '800', color: C.danger, letterSpacing: 0.2 },
+  cancelName:  { fontSize: 12, fontWeight: '600', color: C.textMid, textDecorationLine: 'line-through' },
 });

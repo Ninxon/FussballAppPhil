@@ -288,7 +288,12 @@ BEGIN
     ELSE 'gruppe'
   END;
 
-  UPDATE public.appointments SET status = 'cancelled' WHERE id = p_appointment_id;
+  -- Kurzfrist-Storno eines Kunden fuer den Terminkalender markieren.
+  -- Admin-Stornos bleiben unmarkiert (false).
+  UPDATE public.appointments
+     SET status = 'cancelled',
+         short_notice_cancel = (v_within_deadline AND NOT v_is_admin)
+   WHERE id = p_appointment_id;
 
   -- Kein Token, wenn: explizit angefordert (p_skip_token), Admin storniert
   -- einen Nachholtermin, oder Kunde storniert innerhalb der 3-Stunden-Frist.
@@ -773,6 +778,7 @@ CREATE TABLE IF NOT EXISTS "public"."appointments" (
     "makeup_count" integer DEFAULT 0 NOT NULL,
     "reminder_sent_at" timestamp with time zone,
     "location" "text",
+    "short_notice_cancel" boolean DEFAULT false NOT NULL,
     CONSTRAINT "appointments_location_chk" CHECK ((("location" IS NULL) OR ("location" = ANY (ARRAY['Rüsselsheim'::"text", 'Kelsterbach'::"text"])))),
     CONSTRAINT "appointments_program_check" CHECK (("program" = ANY (ARRAY['individual'::"text", 'gruppe'::"text", 'athletik'::"text", 'torhueter_individual'::"text", 'torhueter_gruppe'::"text"]))),
     CONSTRAINT "appointments_session_level_check" CHECK ((("session_level" IS NULL) OR ("session_level" = ANY (ARRAY['anfaenger'::"text", 'amateur'::"text", 'profi'::"text", 'experte'::"text"])))),
