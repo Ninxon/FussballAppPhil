@@ -18,7 +18,9 @@ function corsHeaders() {
 }
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.ionos.de',
+  port: 587,
+  secure: false,
   auth: {
     user: Deno.env.get('GMAIL_USER'),
     pass: Deno.env.get('GMAIL_PASS'),

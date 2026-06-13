@@ -343,8 +343,8 @@ Löscht in dieser Reihenfolge: charges → measurements → appointments → pro
 `verify_jwt: false` — prüft Admin-Rolle selbst über den mitgeschickten Authorization-Header.
 
 ### `send-booking-email`
-Sendet HTML-Buchungsbestätigung per E-Mail (Gmail via Nodemailer).
-Umgebungsvariablen: `GMAIL_USER`, `GMAIL_PASS`
+Sendet HTML-Buchungsbestätigung per E-Mail (IONOS SMTP via Nodemailer, `smtp.ionos.de:587`).
+Umgebungsvariablen: `GMAIL_USER` (= IONOS-E-Mail), `GMAIL_PASS` (= IONOS App-Passwort)
 
 ### `send-cancellation-email`
 Sendet Storno-Bestätigung per E-Mail.
