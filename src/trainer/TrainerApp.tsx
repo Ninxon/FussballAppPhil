@@ -1,11 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Linking } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { PROGRAMS } from '../constants/programs';
+import { PROGRAMS, PROGRAM_CAPACITY, ProgramId } from '../constants/programs';
 
 const PROGRAM_COLORS: Record<string, string> = {
   individual: '#4A8FE8', gruppe: '#3DBFA0', athletik: '#F5A84A',
   torhueter_individual: '#E87676', torhueter_gruppe: '#9B59B6',
+};
+
+const LEVEL_LABELS: Record<string, string> = {
+  anfaenger: 'Anfänger', amateur: 'Amateur', profi: 'Profi', experte: 'Experte',
+};
+const LEVEL_COLORS: Record<string, string> = {
+  anfaenger: '#4CAF50', amateur: '#FFC107', profi: '#FF9800', experte: '#F44336',
 };
 
 function todayStr() {
@@ -25,7 +32,39 @@ type TrainerAppointment = {
   status: string;
   program: string;
   player_id: string;
+  location: string | null;
+  players: { name: string; level: string | null; player_type: string | null } | null;
 };
+
+type SlotMember = { id: string; name: string; level: string | null };
+
+type TrainerSlot = {
+  key: string;
+  date: string;
+  time: string;
+  program: string;
+  location: string | null;
+  members: SlotMember[];
+};
+
+// Termine zu Slots bündeln: gleicher Tag + Uhrzeit + Programm + Standort = ein
+// Slot. Gruppentrainings zeigen so alle Teilnehmer in einer Karte. Eingabe ist
+// bereits nach date/time sortiert, deshalb bleibt die Reihenfolge chronologisch.
+function groupSlots(appts: TrainerAppointment[]): TrainerSlot[] {
+  const map = new Map<string, TrainerSlot>();
+  const order: string[] = [];
+  for (const a of appts) {
+    const key = `${a.date}|${a.time}|${a.program}|${a.location ?? ''}`;
+    let slot = map.get(key);
+    if (!slot) {
+      slot = { key, date: a.date, time: a.time, program: a.program, location: a.location, members: [] };
+      map.set(key, slot);
+      order.push(key);
+    }
+    slot.members.push({ id: a.id, name: a.players?.name?.trim() || 'Unbekannt', level: a.players?.level ?? null });
+  }
+  return order.map(k => map.get(k)!);
+}
 
 type TrainerProfile = {
   full_name: string;
@@ -59,7 +98,7 @@ export function TrainerApp({ onLogout }: Props) {
       const [{ data: prof }, { data: appts }, { data: vids }] = await Promise.all([
         supabase.from('profiles').select('full_name, email, trainer_specialty').eq('id', user.id).single(),
         supabase.from('appointments')
-          .select('id, date, time, status, program, player_id')
+          .select('id, date, time, status, program, player_id, location, players ( name, level, player_type )')
           .eq('trainer_id', user.id)
           .eq('status', 'confirmed')
           .gte('date', todayStr())
@@ -73,7 +112,9 @@ export function TrainerApp({ onLogout }: Props) {
 
       setProfile(prof as TrainerProfile ?? null);
       // Normalize time: PostgREST serializes native time type as "HH:MM:SS"
-      setAppointments(((appts ?? []) as TrainerAppointment[]).map(a => ({ ...a, time: a.time?.slice(0, 5) ?? a.time })));
+      // PostgREST liefert die eingebettete to-one-Relation als Objekt; der
+      // generierte Typ sieht sie als Array, daher der Cast über unknown.
+      setAppointments(((appts ?? []) as unknown as TrainerAppointment[]).map(a => ({ ...a, time: a.time?.slice(0, 5) ?? a.time })));
       setVideos((vids ?? []) as TrainerVideo[]);
       setLoading(false);
     };
@@ -81,8 +122,8 @@ export function TrainerApp({ onLogout }: Props) {
   }, []);
 
   const ts = todayStr();
-  const todayAppts = appointments.filter(a => a.date === ts);
-  const upcomingAppts = appointments.filter(a => a.date > ts);
+  const todaySlots = groupSlots(appointments.filter(a => a.date === ts));
+  const upcomingSlots = groupSlots(appointments.filter(a => a.date > ts));
 
   return (
     <View style={styles.root}>
@@ -105,20 +146,20 @@ export function TrainerApp({ onLogout }: Props) {
           <View style={styles.content}>
             {tab === 'termine' && (
               <ScrollView contentContainerStyle={styles.scrollContent}>
-                <Text style={styles.sectionTitle}>Heute ({todayAppts.length})</Text>
-                {todayAppts.length === 0 ? (
+                <Text style={styles.sectionTitle}>Heute ({todaySlots.length})</Text>
+                {todaySlots.length === 0 ? (
                   <Text style={styles.empty}>Keine Trainings heute.</Text>
                 ) : (
-                  todayAppts.map(a => <ApptCard key={a.id} appt={a} />)
+                  todaySlots.map(s => <SlotCard key={s.key} slot={s} />)
                 )}
 
                 <Text style={[styles.sectionTitle, { marginTop: 24 }]}>
-                  Bevorstehend ({upcomingAppts.length})
+                  Bevorstehend ({upcomingSlots.length})
                 </Text>
-                {upcomingAppts.length === 0 ? (
+                {upcomingSlots.length === 0 ? (
                   <Text style={styles.empty}>Keine weiteren Trainings.</Text>
                 ) : (
-                  upcomingAppts.map(a => <ApptCard key={a.id} appt={a} />)
+                  upcomingSlots.map(s => <SlotCard key={s.key} slot={s} />)
                 )}
               </ScrollView>
             )}
@@ -165,15 +206,36 @@ export function TrainerApp({ onLogout }: Props) {
   );
 }
 
-function ApptCard({ appt }: { appt: TrainerAppointment }) {
-  const prog = PROGRAMS.find(p => p.id === appt.program);
-  const color = PROGRAM_COLORS[appt.program] ?? '#5A8C6A';
+function SlotCard({ slot }: { slot: TrainerSlot }) {
+  const prog = PROGRAMS.find(p => p.id === slot.program);
+  const color = PROGRAM_COLORS[slot.program] ?? '#5A8C6A';
+  const capacity = PROGRAM_CAPACITY[slot.program as ProgramId] ?? slot.members.length;
+  const isGroup = capacity > 1;
+
   return (
     <View style={[styles.card, { borderLeftColor: color }]}>
-      <View style={[styles.cardAccent, { backgroundColor: color }]} />
-      <View style={styles.cardBody}>
-        <Text style={[styles.cardProgram, { color }]}>{prog?.name ?? appt.program}</Text>
-        <Text style={styles.cardDate}>{fmtDate(appt.date)} · {appt.time} Uhr</Text>
+      <View style={styles.cardHeader}>
+        <View style={styles.cardBody}>
+          <Text style={[styles.cardProgram, { color }]}>{prog?.name ?? slot.program}</Text>
+          <Text style={styles.cardDate}>
+            {fmtDate(slot.date)} · {slot.time} Uhr{slot.location ? ` · ${slot.location}` : ''}
+          </Text>
+        </View>
+        {isGroup && (
+          <View style={[styles.countBadge, { backgroundColor: color + '1A' }]}>
+            <Text style={[styles.countText, { color }]}>{slot.members.length}/{capacity}</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.memberList}>
+        {slot.members.map(m => (
+          <View key={m.id} style={styles.memberRow}>
+            <View style={[styles.levelDot, { backgroundColor: m.level ? (LEVEL_COLORS[m.level] ?? '#D1D5DB') : '#D1D5DB' }]} />
+            <Text style={styles.memberName}>{m.name}</Text>
+            {m.level && <Text style={styles.memberLevel}>{LEVEL_LABELS[m.level] ?? m.level}</Text>}
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -337,19 +399,25 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 10,
     borderLeftWidth: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 6,
     elevation: 2,
   },
-  cardAccent: { width: 4, height: 36, borderRadius: 2, flexShrink: 0 },
+  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   cardBody: { flex: 1 },
   cardProgram: { fontSize: 15, fontWeight: '700', marginBottom: 3 },
   cardDate: { fontSize: 13, color: '#6B7280' },
+  countBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, flexShrink: 0 },
+  countText: { fontSize: 13, fontWeight: '800' },
+
+  // Slot-Mitglieder
+  memberList: { marginTop: 12, borderTopWidth: 1, borderTopColor: '#F1F3F7', paddingTop: 10, gap: 8 },
+  memberRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  levelDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  memberName: { fontSize: 14, fontWeight: '600', color: '#1F2937', flex: 1 },
+  memberLevel: { fontSize: 11, fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.3 },
 
   // Profil
   profileCard: {
