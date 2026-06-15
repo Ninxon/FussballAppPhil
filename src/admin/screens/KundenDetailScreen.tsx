@@ -345,10 +345,34 @@ export function KundenDetailScreen({
     else setShowTokenReset(false);
   };
 
+  // Ob der Kunde ein Programm der Token-Kategorie überhaupt buchen darf.
+  // Muss zur BuchenScreen-Logik passen (Token-Kategorie + can_book_* + Spielertyp),
+  // sonst sieht der Kunde den Nachholtermin, kann ihn aber nicht buchen.
+  const canBookGrantedCategory = (cat: 'individual' | 'gruppe'): boolean => {
+    const t = customer.player_type;
+    if (cat === 'individual') {
+      if (t === 'torwart') return !!customer.can_book_torhueter_individual;
+      if (t === 'feldspieler') return !!customer.can_book_individual;
+      return !!(customer.can_book_individual || customer.can_book_torhueter_individual);
+    }
+    if (t === 'torwart') return !!customer.can_book_torhueter_gruppe;
+    if (t === 'feldspieler') return !!(customer.can_book_gruppe || customer.can_book_athletik);
+    return !!(customer.can_book_gruppe || customer.can_book_athletik || customer.can_book_torhueter_gruppe);
+  };
+
   const doGrantToken = async () => {
-    setGrantLoading(true);
     setGrantError(null);
     setGrantSuccess(false);
+    if (!canBookGrantedCategory(grantCategory)) {
+      const label = grantCategory === 'individual' ? 'Einzeltraining' : 'Gruppentraining';
+      setGrantError(
+        `${customer.full_name} hat keine Buchungsberechtigung für ${label}. ` +
+        `Bitte oben unter „Buchungsberechtigungen" die passende Berechtigung aktivieren — ` +
+        `sonst sieht der Kunde den Nachholtermin, kann ihn aber nicht buchen.`,
+      );
+      return;
+    }
+    setGrantLoading(true);
     const { error } = await onGrantToken(customer.id, grantCategory, grantExpiry.trim());
     setGrantLoading(false);
     if (error) {
