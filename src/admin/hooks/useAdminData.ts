@@ -49,6 +49,8 @@ export type AdminAppointment = {
   attended?: boolean | null;
   location?: string | null;
   short_notice_cancel?: boolean | null;
+  is_makeup?: boolean | null;
+  makeup_count?: number | null;
 };
 
 export type TrainerProfile = {
