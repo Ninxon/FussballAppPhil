@@ -476,6 +476,11 @@ export function TerminkalenderScreen({
                                   <Text style={[dg.apptTagText, { color: isSel ? '#fff' : color }]} numberOfLines={1}>
                                     {cust?.full_name ?? '—'}
                                   </Text>
+                                  {a.is_makeup && (
+                                    <View style={dg.ntPill}>
+                                      <Text style={dg.ntPillText}>NT</Text>
+                                    </View>
+                                  )}
                                 </TouchableOpacity>
                               );
                             })}
@@ -693,6 +698,11 @@ export function TerminkalenderScreen({
                                 <Text style={[wg.apptProg, { color: isSel ? '#fff' : color }]} numberOfLines={1}>
                                   {prog?.name ?? first.program}
                                 </Text>
+                                {appts.some(a => a.is_makeup) && (
+                                  <View style={wg.ntPill}>
+                                    <Text style={wg.ntPillText}>NT</Text>
+                                  </View>
+                                )}
                               </View>
                               <Text style={[wg.apptMeta, isSel && wg.apptMetaSel]} numberOfLines={1}>
                                 {isGrp
@@ -1002,6 +1012,10 @@ const dg = StyleSheet.create({
   },
   apptTagText: { fontSize: 12, fontWeight: '700', flex: 1 },
 
+  // Nachholtermin-Marker (NT) in der Tagesansicht-Zelle
+  ntPill:     { backgroundColor: '#7C3AED', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 },
+  ntPillText: { fontSize: 9, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
+
   // Kurzfrist-Storno-Marker in der Tagesansicht-Zelle
   cancelTag: {
     borderLeftWidth: 3, borderLeftColor: C.danger, borderRadius: 6,
@@ -1091,6 +1105,10 @@ const wg = StyleSheet.create({
   apptMetaSel:  { color: 'rgba(255,255,255,0.85)' },
   apptTrainer:  { fontSize: 11, color: C.textFaint, flexShrink: 1, minWidth: 0 },
   apptTrainerSel:{ color: 'rgba(255,255,255,0.65)' },
+
+  // Nachholtermin-Marker (NT) im Terminblock
+  ntPill:     { backgroundColor: '#7C3AED', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1, flexShrink: 0 },
+  ntPillText: { fontSize: 9, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
 
   // Kurzfrist-Storno-Marker in der Zelle
   cancelBlock: {
