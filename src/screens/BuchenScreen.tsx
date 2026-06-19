@@ -18,7 +18,7 @@ import { germanHolidays, canJoinGroupSlot, reconstructGroups, isBlockedByPeriod 
 import { useBlockedPeriods } from '../hooks/useBlockedPeriods';
 import { LOCATIONS, Location } from '../constants/studio';
 
-const LOC_COLOR: Record<Location, string> = { 'Rüsselsheim': '#4A8FE8', 'Kelsterbach': '#5A8C6A' };
+const LOC_COLOR: Record<Location, string> = { 'Rüsselsheim': '#4A8FE8', 'Kelsterbach': '#5A8C6A', 'Groß-Gerau': '#F5A84A' };
 
 interface Props {
   slotCounts: SlotCount[];

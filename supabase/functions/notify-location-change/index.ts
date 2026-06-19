@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
     if (!trainer_id || day_of_week == null || !time || !new_location) {
       return json({ error: 'trainer_id, day_of_week, time, new_location sind erforderlich' }, 400);
     }
-    if (new_location !== 'Rüsselsheim' && new_location !== 'Kelsterbach') {
+    if (new_location !== 'Rüsselsheim' && new_location !== 'Kelsterbach' && new_location !== 'Groß-Gerau') {
       return json({ error: 'Ungültiger Standort' }, 400);
     }
 

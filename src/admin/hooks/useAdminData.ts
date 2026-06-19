@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PlayerLevel, PlayerType, BookingPermissions, TrainerSchedule, TrainerSpecialty } from '../../types';
+import { PlayerLevel, PlayerType, BookingPermissions, TrainerSchedule, TrainerSpecialty, Location } from '../../types';
 import { AppointmentService } from '../../services/appointmentService';
 import { ProfileService } from '../../services/profileService';
 import { PlayerService } from '../../services/playerService';
@@ -517,7 +517,7 @@ export function useAdminData() {
   // Bei Standort-Wechsel zieht ein DB-Trigger zukünftige Termine mit; danach
   // benachrichtigen wir die betroffenen Kunden per E-Mail.
   const setScheduleSlot = async (
-    trainerId: string, day: number, time: string, location: 'Rüsselsheim' | 'Kelsterbach' | null,
+    trainerId: string, day: number, time: string, location: Location | null,
   ) => {
     const previous = trainerSchedules.find(
       s => s.trainer_id === trainerId && s.day_of_week === day && s.time === time,
