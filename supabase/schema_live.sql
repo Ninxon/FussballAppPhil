@@ -113,7 +113,7 @@ BEGIN
     RETURN json_build_object('error', 'An Wochenenden und Feiertagen sind keine Buchungen möglich.');
   END IF;
 
-  IF p_location IS NOT NULL AND p_location NOT IN ('Rüsselsheim', 'Kelsterbach') THEN
+  IF p_location IS NOT NULL AND p_location NOT IN ('Rüsselsheim', 'Kelsterbach', 'Groß-Gerau') THEN
     RETURN json_build_object('error', 'Ungültiger Standort.');
   END IF;
 
@@ -779,7 +779,7 @@ CREATE TABLE IF NOT EXISTS "public"."appointments" (
     "reminder_sent_at" timestamp with time zone,
     "location" "text",
     "short_notice_cancel" boolean DEFAULT false NOT NULL,
-    CONSTRAINT "appointments_location_chk" CHECK ((("location" IS NULL) OR ("location" = ANY (ARRAY['Rüsselsheim'::"text", 'Kelsterbach'::"text"])))),
+    CONSTRAINT "appointments_location_chk" CHECK ((("location" IS NULL) OR ("location" = ANY (ARRAY['Rüsselsheim'::"text", 'Kelsterbach'::"text", 'Groß-Gerau'::"text"])))),
     CONSTRAINT "appointments_program_check" CHECK (("program" = ANY (ARRAY['individual'::"text", 'gruppe'::"text", 'athletik'::"text", 'torhueter_individual'::"text", 'torhueter_gruppe'::"text"]))),
     CONSTRAINT "appointments_session_level_check" CHECK ((("session_level" IS NULL) OR ("session_level" = ANY (ARRAY['anfaenger'::"text", 'amateur'::"text", 'profi'::"text", 'experte'::"text"])))),
     CONSTRAINT "appointments_status_check" CHECK (("status" = ANY (ARRAY['confirmed'::"text", 'cancelled'::"text"])))
@@ -823,7 +823,7 @@ CREATE TABLE IF NOT EXISTS "public"."players" (
     "is_active" boolean DEFAULT true NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     CONSTRAINT "players_level_check" CHECK ((("level" IS NULL) OR ("level" = ANY (ARRAY['anfaenger'::"text", 'amateur'::"text", 'profi'::"text", 'experte'::"text"])))),
-    CONSTRAINT "players_location_chk" CHECK ((("location" IS NULL) OR ("location" = ANY (ARRAY['Rüsselsheim'::"text", 'Kelsterbach'::"text"])))),
+    CONSTRAINT "players_location_chk" CHECK ((("location" IS NULL) OR ("location" = ANY (ARRAY['Rüsselsheim'::"text", 'Kelsterbach'::"text", 'Groß-Gerau'::"text"])))),
     CONSTRAINT "players_player_type_check" CHECK ((("player_type" IS NULL) OR ("player_type" = ANY (ARRAY['torwart'::"text", 'feldspieler'::"text"]))))
 );
 
@@ -895,7 +895,7 @@ CREATE TABLE IF NOT EXISTS "public"."trainer_schedules" (
     "time" time without time zone NOT NULL,
     "location" "text" NOT NULL,
     CONSTRAINT "trainer_schedules_day_of_week_check" CHECK ((("day_of_week" >= 1) AND ("day_of_week" <= 5))),
-    CONSTRAINT "trainer_schedules_location_chk" CHECK (("location" = ANY (ARRAY['Rüsselsheim'::"text", 'Kelsterbach'::"text"])))
+    CONSTRAINT "trainer_schedules_location_chk" CHECK (("location" = ANY (ARRAY['Rüsselsheim'::"text", 'Kelsterbach'::"text", 'Groß-Gerau'::"text"])))
 );
 
 
