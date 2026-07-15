@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { Appointment, CancellationToken, ProgramCategory, SlotCount, SlotPlayer, Player } from '../types';
+import { Appointment, CancellationToken, ProgramCategory, SlotCount, SlotPlayer, Player, Location } from '../types';
 import { PROGRAM_CATEGORY, ProgramId } from '../constants/programs';
 import { checkDailyConflict, checkProgramPermission } from '../utils/bookingRules';
 import { fmtDate } from '../constants/i18n';
@@ -199,7 +199,7 @@ export function useAppointments(activePlayer: Player | null) {
 
   const addAppointment = async (
     date: string, time: string, program: string,
-    location: 'Rüsselsheim' | 'Kelsterbach' | null = null,
+    location: Location | null = null,
   ) => {
     if (!activePlayer) return { error: { message: 'Kein Spieler ausgewählt.' } };
 

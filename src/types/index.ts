@@ -1,3 +1,6 @@
+import type { Location } from '../constants/studio';
+export type { Location };
+
 export type AppointmentStatus = 'confirmed' | 'cancelled';
 
 export type Appointment = {
@@ -12,7 +15,7 @@ export type Appointment = {
   session_birth_year?: number | null;
   is_makeup?: boolean;
   makeup_count?: number;
-  location?: 'Rüsselsheim' | 'Kelsterbach' | null;
+  location?: Location | null;
   created_at?: string;
 };
 
@@ -26,7 +29,7 @@ export type TrainerSchedule = {
   trainer_id: string;
   day_of_week: number;
   time: string;
-  location?: 'Rüsselsheim' | 'Kelsterbach' | null;
+  location?: Location | null;
 };
 
 export type PlayerLevel = 'anfaenger' | 'amateur' | 'profi' | 'experte';
@@ -47,7 +50,7 @@ export type Player = {
   can_book_torhueter_individual: boolean;
   can_book_torhueter_gruppe: boolean;
   skip_group_age_level_check: boolean;
-  location?: 'Rüsselsheim' | 'Kelsterbach' | null;
+  location?: Location | null;
   player_number?: number | null;
   is_active: boolean;
   created_at?: string;
@@ -100,7 +103,7 @@ export type SlotCount = {
   date: string;
   time: string;
   program: string;
-  location: 'Rüsselsheim' | 'Kelsterbach' | null;
+  location: Location | null;
   booked: number;
 };
 
@@ -108,7 +111,7 @@ export type SlotPlayer = {
   date: string;
   time: string;
   program: string;
-  location: 'Rüsselsheim' | 'Kelsterbach' | null;
+  location: Location | null;
   session_birth_year: number;
   session_level: string | null;
   created_at: string;

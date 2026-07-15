@@ -5,10 +5,10 @@ import { TrainerProfile } from '../hooks/useAdminData';
 import { SLOTS } from '../../constants/slots';
 import { LOCATIONS, Location } from '../../constants/studio';
 
-const LOC_SHORT: Record<Location, string> = { 'Rüsselsheim': 'R', 'Kelsterbach': 'K' };
-const LOC_COLOR: Record<Location, string> = { 'Rüsselsheim': '#4A8FE8', 'Kelsterbach': '#5A8C6A' };
+const LOC_SHORT: Record<Location, string> = { 'Rüsselsheim': 'R', 'Kelsterbach': 'K', 'Groß-Gerau': 'GG' };
+const LOC_COLOR: Record<Location, string> = { 'Rüsselsheim': '#4A8FE8', 'Kelsterbach': '#5A8C6A', 'Groß-Gerau': '#F5A84A' };
 
-// Zyklus pro Zelle: Aus → Rüsselsheim → Kelsterbach → Aus.
+// Zyklus pro Zelle: Aus → Rüsselsheim → Kelsterbach → Groß-Gerau → Aus.
 // "Aus" bedeutet keine Slot-Zeile; jeder vorhandene Slot hat einen Standort.
 function nextLocation(current: Location | null | undefined, hasRow: boolean): Location | null {
   if (!hasRow || current == null) return LOCATIONS[0];
@@ -417,7 +417,7 @@ export function ZeitplanScreen({ trainers, trainerSchedules, trainerMonthlyCount
       {/* Wochenraster */}
       {selectedTrainer && (
         <View style={styles.legend}>
-          <Text style={styles.legendHint}>Tippen wechselt: Aus → Rüsselsheim → Kelsterbach → Aus</Text>
+          <Text style={styles.legendHint}>Tippen wechselt: Aus → Rüsselsheim → Kelsterbach → Groß-Gerau → Aus</Text>
           <View style={styles.legendRow}>
             {LOCATIONS.map(loc => (
               <View key={loc} style={styles.legendItem}>
