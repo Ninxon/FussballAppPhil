@@ -25,6 +25,43 @@ function fmtDate(ds: string) {
   return `${d}.${m}.${y}`;
 }
 
+// Nav-Icons als View-Formen (statt Emojis) — Stil wie in src/components/BottomNav.tsx
+const NAV_ACTIVE = '#1C2133';
+const NAV_INACTIVE = '#9CA3AF';
+
+function CalendarIcon({ color, size = 22 }: { color: string; size?: number }) {
+  const bw = Math.max(1.8, size * 0.09);
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: size, height: size * 0.92, borderWidth: bw, borderColor: color, borderRadius: size * 0.16, overflow: 'hidden' }}>
+        <View style={{ height: size * 0.26, backgroundColor: color }} />
+      </View>
+    </View>
+  );
+}
+
+function VideoIcon({ color, size = 22 }: { color: string; size?: number }) {
+  const bw = Math.max(1.8, size * 0.09);
+  const t = size * 0.2;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: size, height: size * 0.74, borderWidth: bw, borderColor: color, borderRadius: size * 0.14, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ width: 0, height: 0, borderTopWidth: t, borderBottomWidth: t, borderLeftWidth: t * 1.3, borderTopColor: 'transparent', borderBottomColor: 'transparent', borderLeftColor: color, marginLeft: t * 0.5 }} />
+      </View>
+    </View>
+  );
+}
+
+function PersonIcon({ color, size = 22 }: { color: string; size?: number }) {
+  const bw = Math.max(1.8, size * 0.09);
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: size * 0.42, height: size * 0.42, borderRadius: size * 0.21, borderWidth: bw, borderColor: color, marginBottom: size * 0.08 }} />
+      <View style={{ width: size * 0.72, height: size * 0.34, borderWidth: bw, borderColor: color, borderTopLeftRadius: size * 0.36, borderTopRightRadius: size * 0.36, borderBottomWidth: 0 }} />
+    </View>
+  );
+}
+
 type TrainerAppointment = {
   id: string;
   date: string;
@@ -180,7 +217,7 @@ export function TrainerApp({ onLogout }: Props) {
               onPress={() => setTab('termine')}
               activeOpacity={0.7}
             >
-              <Text style={[styles.navIcon, tab === 'termine' && styles.navIconActive]}>📅</Text>
+              <CalendarIcon color={tab === 'termine' ? NAV_ACTIVE : NAV_INACTIVE} />
               <Text style={[styles.navLabel, tab === 'termine' && styles.navLabelActive]}>Termine</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -188,7 +225,7 @@ export function TrainerApp({ onLogout }: Props) {
               onPress={() => setTab('videos')}
               activeOpacity={0.7}
             >
-              <Text style={[styles.navIcon, tab === 'videos' && styles.navIconActive]}>🎬</Text>
+              <VideoIcon color={tab === 'videos' ? NAV_ACTIVE : NAV_INACTIVE} />
               <Text style={[styles.navLabel, tab === 'videos' && styles.navLabelActive]}>Videos</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -196,7 +233,7 @@ export function TrainerApp({ onLogout }: Props) {
               onPress={() => setTab('profil')}
               activeOpacity={0.7}
             >
-              <Text style={[styles.navIcon, tab === 'profil' && styles.navIconActive]}>👤</Text>
+              <PersonIcon color={tab === 'profil' ? NAV_ACTIVE : NAV_INACTIVE} />
               <Text style={[styles.navLabel, tab === 'profil' && styles.navLabelActive]}>Profil</Text>
             </TouchableOpacity>
           </View>
@@ -245,7 +282,9 @@ function VideosTab({ videos }: { videos: TrainerVideo[] }) {
   if (videos.length === 0) {
     return (
       <ScrollView contentContainerStyle={[styles.scrollContent, { alignItems: 'center', paddingTop: 60 }]}>
-        <Text style={{ fontSize: 48, marginBottom: 16 }}>🎬</Text>
+        <View style={{ marginBottom: 16 }}>
+          <VideoIcon color="#C4C9D2" size={48} />
+        </View>
         <Text style={[styles.sectionTitle, { textAlign: 'center' }]}>Noch keine Videos vorhanden.</Text>
         <Text style={[styles.empty, { textAlign: 'center' }]}>Der Admin kann Videos für dich hinterlegen.</Text>
       </ScrollView>
@@ -484,8 +523,6 @@ const styles = StyleSheet.create({
   },
   navItem: { flex: 1, alignItems: 'center', paddingVertical: 6, gap: 3 },
   navItemActive: {},
-  navIcon: { fontSize: 22 },
-  navIconActive: {},
   navLabel: { fontSize: 11, fontWeight: '600', color: '#9CA3AF' },
   navLabelActive: { color: '#1C2133' },
 });
