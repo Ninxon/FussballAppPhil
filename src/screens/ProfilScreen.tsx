@@ -105,6 +105,11 @@ export function ProfilScreen({ onLogout, players }: Props) {
   const [editPhone, setEditPhone] = useState('');
   const [contactLoading, setContactLoading] = useState(false);
   const [contactMsg, setContactMsg] = useState('');
+  const pwSuccessTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (pwSuccessTimer.current) clearTimeout(pwSuccessTimer.current);
+  }, []);
 
   useEffect(() => {
     Animated.parallel([
@@ -148,7 +153,7 @@ export function ProfilScreen({ onLogout, players }: Props) {
       setConfirmPw('');
       setPwOpen(false);
       setPwSuccess(true);
-      setTimeout(() => setPwSuccess(false), 3000);
+      pwSuccessTimer.current = setTimeout(() => setPwSuccess(false), 3000);
     }
   };
 

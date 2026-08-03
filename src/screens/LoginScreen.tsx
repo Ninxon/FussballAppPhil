@@ -329,7 +329,7 @@ export function LoginScreen({ onLogin }: Props) {
 
   const doLogin = async () => {
     if (!email.includes('@')) { setErr('Bitte eine gültige E-Mail-Adresse eingeben.'); return; }
-    if (pw.length < 4) { setErr('Passwort zu kurz.'); return; }
+    if (pw.length < 6) { setErr('Passwort muss mindestens 6 Zeichen lang sein.'); return; }
     setErr('');
     setLoading(true);
     setRememberMe(rememberMe);
@@ -369,7 +369,7 @@ export function LoginScreen({ onLogin }: Props) {
   };
 
   const emailErr = !!err && !email.includes('@');
-  const pwErr = !!err && pw.length < 4;
+  const pwErr = !!err && pw.length < 6;
 
   return (
     <KeyboardAvoidingView

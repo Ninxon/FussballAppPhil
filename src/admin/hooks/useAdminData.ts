@@ -78,70 +78,75 @@ export function useAdminData() {
   const load = async () => {
     setLoading(true);
     setLoadError(null);
-    const [
-      { data: playerRows, error: profilesErr },
-      { data: appointments, error: apptsErr },
-      { data: trainerProfiles },
-      { data: allTokens },
-      { data: schedules },
-      { data: monthlyCounts },
-    ] = await Promise.all([
-      PlayerService.fetchAllWithParent(),
-      AppointmentService.fetchAllDesc(),
-      ProfileService.fetchTrainers(),
-      TokenService.fetchAllActive(),
-      TrainerScheduleService.fetchAll(),
-      supabase.rpc('get_trainer_monthly_counts'),
-    ]);
-    if (profilesErr || apptsErr) {
-      setLoadError(profilesErr?.message ?? apptsErr?.message ?? 'Fehler beim Laden.');
+    try {
+      const [
+        { data: playerRows, error: profilesErr },
+        { data: appointments, error: apptsErr },
+        { data: trainerProfiles, error: trainersErr },
+        { data: allTokens, error: tokensErr },
+        { data: schedules, error: schedulesErr },
+        { data: monthlyCounts, error: countsErr },
+      ] = await Promise.all([
+        PlayerService.fetchAllWithParent(),
+        AppointmentService.fetchAllDesc(),
+        ProfileService.fetchTrainers(),
+        TokenService.fetchAllActive(),
+        TrainerScheduleService.fetchAll(),
+        supabase.rpc('get_trainer_monthly_counts'),
+      ]);
+      const firstError = profilesErr ?? apptsErr ?? trainersErr ?? tokensErr ?? schedulesErr ?? countsErr;
+      if (firstError) {
+        setLoadError(firstError.message ?? 'Fehler beim Laden.');
+      }
+
+      // players-Zeile (+ Eltern) auf die CustomerProfile-Form der Admin-UI mappen.
+      const mapped: CustomerProfile[] = (playerRows ?? []).map((pl: any) => ({
+        id: pl.id,
+        parent_id: pl.parent_id,
+        full_name: pl.name ?? '',
+        email: pl.parent?.email ?? null,
+        phone: pl.parent?.phone ?? '',
+        address: pl.parent?.address ?? null,
+        parent_name: pl.parent?.full_name ?? null,
+        birth_date: pl.birth_date ?? null,
+        location: pl.location ?? null,
+        player_type: pl.player_type ?? null,
+        customer_number: pl.player_number,
+        is_active: pl.is_active,
+        role: 'customer',
+        level: pl.level ?? null,
+        skip_group_age_level_check: pl.skip_group_age_level_check ?? false,
+        can_book_individual: pl.can_book_individual,
+        can_book_gruppe: pl.can_book_gruppe,
+        can_book_athletik: pl.can_book_athletik,
+        can_book_torhueter_individual: pl.can_book_torhueter_individual,
+        can_book_torhueter_gruppe: pl.can_book_torhueter_gruppe,
+      }));
+      setCustomers(mapped);
+      setAllAppointments(((appointments ?? []) as AdminAppointment[]).map(fmtTime));
+      setTrainers((trainerProfiles ?? []) as TrainerProfile[]);
+      setTrainerSchedules(((schedules ?? []) as TrainerSchedule[]).map(fmtTime));
+
+      // Token-Zaehler pro Spieler (player_id = customer.id der Admin-UI).
+      const tokenMap: Record<string, { individual: number; gruppe: number }> = {};
+      for (const token of (allTokens ?? []) as { player_id: string; category: string }[]) {
+        if (!tokenMap[token.player_id]) tokenMap[token.player_id] = { individual: 0, gruppe: 0 };
+        if (token.category === 'individual') tokenMap[token.player_id].individual++;
+        else if (token.category === 'gruppe') tokenMap[token.player_id].gruppe++;
+      }
+      setActiveTokensByCustomer(tokenMap);
+
+      const countsMap: Record<string, Record<string, number>> = {};
+      for (const row of (monthlyCounts ?? []) as { trainer_id: string; year_month: string; sessions: number }[]) {
+        if (!countsMap[row.trainer_id]) countsMap[row.trainer_id] = {};
+        countsMap[row.trainer_id][row.year_month] = row.sessions;
+      }
+      setTrainerMonthlyCounts(countsMap);
+    } catch (e: any) {
+      setLoadError(e?.message ?? 'Fehler beim Laden.');
+    } finally {
+      setLoading(false);
     }
-
-    // players-Zeile (+ Eltern) auf die CustomerProfile-Form der Admin-UI mappen.
-    const mapped: CustomerProfile[] = (playerRows ?? []).map((pl: any) => ({
-      id: pl.id,
-      parent_id: pl.parent_id,
-      full_name: pl.name ?? '',
-      email: pl.parent?.email ?? null,
-      phone: pl.parent?.phone ?? '',
-      address: pl.parent?.address ?? null,
-      parent_name: pl.parent?.full_name ?? null,
-      birth_date: pl.birth_date ?? null,
-      location: pl.location ?? null,
-      player_type: pl.player_type ?? null,
-      customer_number: pl.player_number,
-      is_active: pl.is_active,
-      role: 'customer',
-      level: pl.level ?? null,
-      skip_group_age_level_check: pl.skip_group_age_level_check ?? false,
-      can_book_individual: pl.can_book_individual,
-      can_book_gruppe: pl.can_book_gruppe,
-      can_book_athletik: pl.can_book_athletik,
-      can_book_torhueter_individual: pl.can_book_torhueter_individual,
-      can_book_torhueter_gruppe: pl.can_book_torhueter_gruppe,
-    }));
-    setCustomers(mapped);
-    setAllAppointments(((appointments ?? []) as AdminAppointment[]).map(fmtTime));
-    setTrainers((trainerProfiles ?? []) as TrainerProfile[]);
-    setTrainerSchedules(((schedules ?? []) as TrainerSchedule[]).map(fmtTime));
-
-    // Token-Zaehler pro Spieler (player_id = customer.id der Admin-UI).
-    const tokenMap: Record<string, { individual: number; gruppe: number }> = {};
-    for (const token of (allTokens ?? []) as { player_id: string; category: string }[]) {
-      if (!tokenMap[token.player_id]) tokenMap[token.player_id] = { individual: 0, gruppe: 0 };
-      if (token.category === 'individual') tokenMap[token.player_id].individual++;
-      else if (token.category === 'gruppe') tokenMap[token.player_id].gruppe++;
-    }
-    setActiveTokensByCustomer(tokenMap);
-
-    const countsMap: Record<string, Record<string, number>> = {};
-    for (const row of (monthlyCounts ?? []) as { trainer_id: string; year_month: string; sessions: number }[]) {
-      if (!countsMap[row.trainer_id]) countsMap[row.trainer_id] = {};
-      countsMap[row.trainer_id][row.year_month] = row.sessions;
-    }
-    setTrainerMonthlyCounts(countsMap);
-
-    setLoading(false);
   };
 
   const cancelAppointment = async (id: string, reason?: string) => {

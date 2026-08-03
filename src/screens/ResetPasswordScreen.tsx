@@ -108,6 +108,11 @@ export function ResetPasswordScreen({ onDone }: Props) {
   // die Recovery-Session baut detectSessionInUrl aber erst asynchron auf. Erst
   // wenn sie steht, darf updateUser laufen (sonst „Auth session missing").
   const [sessionReady, setSessionReady] = useState(false);
+  const doneTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (doneTimer.current) clearTimeout(doneTimer.current);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -142,7 +147,7 @@ export function ResetPasswordScreen({ onDone }: Props) {
       );
     } else {
       setSuccess(true);
-      setTimeout(() => onDone(), 1800);
+      doneTimer.current = setTimeout(() => onDone(), 1800);
     }
   };
 

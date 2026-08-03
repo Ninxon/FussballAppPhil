@@ -18,15 +18,23 @@ export function NotificationsScreen() {
   const [formLocation, setFormLocation] = useState<Location | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => { loadNotifications(); }, []);
 
   const loadNotifications = async () => {
-    const { data } = await supabase
+    setLoading(true);
+    setLoadError(false);
+    const { data, error } = await supabase
       .from('notifications')
       .select('*')
       .order('created_at', { ascending: false });
-    setNotifications((data ?? []) as AppNotification[]);
+    if (error) {
+      setLoadError(true);
+    } else {
+      setNotifications((data ?? []) as AppNotification[]);
+    }
     setLoading(false);
   };
 
@@ -60,7 +68,12 @@ export function NotificationsScreen() {
   };
 
   const doDelete = async (id: string) => {
-    await supabase.from('notifications').delete().eq('id', id);
+    setDeleteError(null);
+    const { error } = await supabase.from('notifications').delete().eq('id', id);
+    if (error) {
+      setDeleteError('Löschen fehlgeschlagen: ' + error.message);
+      return;
+    }
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
@@ -129,7 +142,16 @@ export function NotificationsScreen() {
 
       <Text style={styles.sectionTitle}>Veröffentlichte Infos ({notifications.length})</Text>
 
-      {notifications.length === 0 ? (
+      {deleteError && <Text style={styles.errorText}>{deleteError}</Text>}
+
+      {loadError ? (
+        <View>
+          <Text style={styles.empty}>Infos konnten nicht geladen werden.</Text>
+          <TouchableOpacity onPress={loadNotifications} activeOpacity={0.7}>
+            <Text style={styles.retryText}>Erneut versuchen</Text>
+          </TouchableOpacity>
+        </View>
+      ) : notifications.length === 0 ? (
         <Text style={styles.empty}>Noch keine Infos veröffentlicht.</Text>
       ) : (
         notifications.map(n => (
@@ -186,6 +208,7 @@ const styles = StyleSheet.create({
   saveBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#152238', marginBottom: 14 },
   empty: { color: '#7A90AE', fontSize: 14, textAlign: 'center', paddingVertical: 24 },
+  retryText: { color: '#4A8FE8', fontSize: 14, fontWeight: '700', textAlign: 'center', paddingBottom: 16 },
   notifCard: {
     backgroundColor: '#fff', borderRadius: 14, padding: 18, marginBottom: 12,
     shadowColor: '#152238', shadowOpacity: 0.04, shadowOffset: { width: 0, height: 1 }, shadowRadius: 4, elevation: 1,

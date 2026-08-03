@@ -47,6 +47,7 @@ function getStyles(C: Colors) {
     emptyIconBar: { width: 28, height: 3, borderRadius: 2, backgroundColor: C.accent, opacity: 0.4 },
     emptyTitle: { fontSize: 17, fontWeight: '700', color: C.text, marginBottom: 6, textAlign: 'center' },
     emptySub: { fontSize: 14, color: C.textFaint, textAlign: 'center', lineHeight: 20 },
+    retryLink: { fontSize: 14, fontWeight: '700', color: C.accent, marginTop: 14, textAlign: 'center' },
     card: {
       padding: 20,
       marginBottom: 14,
@@ -78,17 +79,28 @@ export function InfosScreen({ player }: Props) {
   const insets = useSafeAreaInsets();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
-  useEffect(() => {
+  const loadNotifications = React.useCallback(() => {
+    setLoading(true);
+    setLoadError(false);
     supabase
       .from('notifications')
       .select('*')
       .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setNotifications((data ?? []) as AppNotification[]);
+      .then(({ data, error }) => {
+        if (error) {
+          setLoadError(true);
+        } else {
+          setNotifications((data ?? []) as AppNotification[]);
+        }
         setLoading(false);
       });
   }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
 
   const visibleNotifications = notifications.filter(n =>
     !n.location || n.location === player?.location
@@ -108,6 +120,12 @@ export function InfosScreen({ player }: Props) {
       <View style={styles.content}>
         {loading ? (
           <ActivityIndicator color={C.accentLight} style={{ marginTop: 40 }} />
+        ) : loadError ? (
+          <GlassCard style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>Infos konnten nicht geladen werden</Text>
+            <Text style={styles.emptySub}>Bitte überprüfe deine Internetverbindung.</Text>
+            <Text style={styles.retryLink} onPress={loadNotifications}>Erneut versuchen</Text>
+          </GlassCard>
         ) : visibleNotifications.length === 0 ? (
           <GlassCard style={styles.emptyCard}>
             <View style={styles.emptyIcon}>

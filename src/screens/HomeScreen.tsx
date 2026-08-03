@@ -173,7 +173,6 @@ function getStyles(C: Colors) {
     emptyTitle: { fontSize: 17, fontWeight: '700', color: C.text, marginBottom: 4, textAlign: 'center' },
     emptySub: { fontSize: 14, color: C.textFaint, textAlign: 'center', lineHeight: 20 },
     btns: { paddingHorizontal: 20 },
-    btnDisabled: { opacity: 0.45 },
     noQuotaHint: {
       fontSize: 12,
       color: C.textFaint,
@@ -299,7 +298,7 @@ export function HomeScreen({ appointments, player, activeTokens, setTab, header 
             label="Nachholtermin buchen"
             onPress={() => setTab('buchen')}
             variant={buchenActive ? 'primary' : 'ghost'}
-            style={!buchenActive ? styles.btnDisabled : undefined}
+            disabled={!buchenActive}
           />
           {!buchenActive && (
             <Text style={styles.noQuotaHint}>Kein Nachholtermin verfügbar</Text>
