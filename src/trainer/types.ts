@@ -29,8 +29,21 @@ export type TrainerProfile = {
 export type TrainerVideo = {
   id: string;
   title: string;
-  url: string;
   description: string | null;
+  /** Externer Link; NULL, wenn die Datei im Storage liegt. */
+  url: string | null;
+  /** Objektpfad im Bucket; NULL bei externem Link. */
+  storage_path: string | null;
+  size_bytes?: number | null;
+};
+
+/** Ein Paket ist eine vom Admin zusammengestellte Trainingseinheit. */
+export type TrainerVideoPackage = {
+  id: string;
+  title: string;
+  description: string | null;
+  created_at: string;
+  videos: TrainerVideo[];
 };
 
 // Termine zu Slots bündeln: gleicher Tag + Uhrzeit + Programm + Standort = ein
