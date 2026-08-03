@@ -48,7 +48,10 @@ export const styles = StyleSheet.create({
     marginBottom: 14, gap: 12,
   },
   cardTitle: { fontSize: 15, fontWeight: '700', color: C.text },
-  cardHint: { fontSize: 12, color: C.textFaint, marginTop: -8, marginBottom: 14, lineHeight: 17 },
+  // Positiver Abstand: cardTitle bringt selbst keinen marginBottom mit (der
+  // liegt auf cardTitleRow). Ein negativer marginTop zog den Hinweis hier
+  // direkt in die Ueberschrift hinein.
+  cardHint: { fontSize: 12, color: C.textFaint, marginTop: 8, marginBottom: 14, lineHeight: 17 },
 
   // ── Formularelemente ─────────────────────────────────────────────────────
   fieldLabel: {
