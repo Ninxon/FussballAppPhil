@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 import { GlassCard } from '../components/GlassCard';
@@ -56,27 +56,30 @@ export function InfosScreen({ player }: Props) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadNotifications = React.useCallback(() => {
-    setLoading(true);
+  const loadNotifications = React.useCallback(async () => {
     setLoadError(false);
-    supabase
+    const { data, error } = await supabase
       .from('notifications')
       .select('*')
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (error) {
-          setLoadError(true);
-        } else {
-          setNotifications((data ?? []) as AppNotification[]);
-        }
-        setLoading(false);
-      });
+      .order('created_at', { ascending: false });
+    if (error) {
+      setLoadError(true);
+    } else {
+      setNotifications((data ?? []) as AppNotification[]);
+    }
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     loadNotifications();
   }, [loadNotifications]);
+
+  const doRefresh = async () => {
+    setRefreshing(true);
+    try { await loadNotifications(); } finally { setRefreshing(false); }
+  };
 
   const visibleNotifications = notifications.filter(n =>
     !n.location || n.location === player?.location
@@ -87,6 +90,9 @@ export function InfosScreen({ player }: Props) {
       style={[styles.flex, { backgroundColor: 'transparent' }]}
       contentContainerStyle={{ paddingBottom: 24 }}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={doRefresh} tintColor={C.accentLight} colors={[C.accentLight]} />
+      }
     >
       <ScreenHeader>Infos &{'\n'}Neuigkeiten</ScreenHeader>
 
@@ -97,7 +103,7 @@ export function InfosScreen({ player }: Props) {
           <GlassCard style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>Infos konnten nicht geladen werden</Text>
             <Text style={styles.emptySub}>Bitte überprüfe deine Internetverbindung.</Text>
-            <Text style={styles.retryLink} onPress={loadNotifications}>Erneut versuchen</Text>
+            <Text style={styles.retryLink} onPress={() => { setLoading(true); loadNotifications(); }}>Erneut versuchen</Text>
           </GlassCard>
         ) : visibleNotifications.length === 0 ? (
           <GlassCard style={styles.emptyCard}>

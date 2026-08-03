@@ -95,8 +95,10 @@ function AppInner() {
   // nicht wegen verpasstem PASSWORD_RECOVERY-Event als normaler Login durchrutscht.
   const [passwordRecovery, setPasswordRecovery] = useState(isPasswordRecoveryUrl);
   const [tab, setTab] = useState<Tab>('home');
-  const { players, activePlayer, activePlayerId, setActivePlayer } = usePlayers();
-  const { slotCounts, slotPlayers, myAppointments, activeTokens, addAppointment, cancelAppointment, refreshSlotData } = useAppointments(activePlayer);
+  const { players, activePlayer, activePlayerId, setActivePlayer, loading: playersLoading } = usePlayers();
+  const { slotCounts, slotPlayers, myAppointments, activeTokens, addAppointment, cancelAppointment, refreshSlotData, refetch, loading: apptsLoading } = useAppointments(activePlayer);
+  // Initial-Load der Kundendaten: solange keine leeren Zustände zeigen.
+  const dataLoading = playersLoading || apptsLoading;
   const { trainerSchedules, trainers: trainerProfiles } = useTrainerSchedules();
 
   const switcher = (
@@ -220,6 +222,8 @@ function AppInner() {
                 activeTokens={activeTokens}
                 setTab={setTab}
                 header={switcher}
+                loading={dataLoading}
+                onRefresh={refetch}
               />
             )}
             {tab === 'termine' && (
@@ -229,6 +233,8 @@ function AppInner() {
                 activeTokens={activeTokens}
                 setTab={setTab}
                 header={switcher}
+                loading={dataLoading}
+                onRefresh={refetch}
               />
             )}
             {tab === 'buchen' && (
@@ -245,6 +251,7 @@ function AppInner() {
                 trainers={trainerProfiles}
                 refreshSlotData={refreshSlotData}
                 header={switcher}
+                loading={dataLoading}
               />
             )}
             {tab === 'infos' && (

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 import { GlassCard } from '../components/GlassCard';
@@ -16,6 +16,10 @@ interface Props {
   activeTokens: CancellationToken[];
   setTab: (t: Tab) => void;
   header?: React.ReactNode;
+  /** Initial-Load läuft noch — Spinner statt leerer Zustände zeigen. */
+  loading?: boolean;
+  /** Pull-to-Refresh: lädt Termine, Tokens und Slots neu. */
+  onRefresh?: () => Promise<void>;
 }
 
 function daysUntil(isoDate: string): number {
@@ -156,10 +160,17 @@ function getStyles(C: Colors) {
   });
 }
 
-export function HomeScreen({ appointments, player, activeTokens, setTab, header }: Props) {
+export function HomeScreen({ appointments, player, activeTokens, setTab, header, loading = false, onRefresh }: Props) {
   const { C } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
   const firstName = player?.name?.split(' ')[0] ?? '';
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  const doRefresh = async () => {
+    if (!onRefresh) return;
+    setRefreshing(true);
+    try { await onRefresh(); } finally { setRefreshing(false); }
+  };
 
   const ts = todayStr();
   const next = [...appointments]
@@ -188,6 +199,9 @@ export function HomeScreen({ appointments, player, activeTokens, setTab, header 
       style={[styles.flex, { backgroundColor: 'transparent' }]}
       contentContainerStyle={{ paddingBottom: 16 }}
       showsVerticalScrollIndicator={false}
+      refreshControl={onRefresh && (
+        <RefreshControl refreshing={refreshing} onRefresh={doRefresh} tintColor={C.accent} colors={[C.accent]} />
+      ) || undefined}
     >
       <FadeIn>
 
@@ -223,7 +237,11 @@ export function HomeScreen({ appointments, player, activeTokens, setTab, header 
 
         {/* Nächster Termin */}
         <View style={styles.section}>
-          {next ? (
+          {loading ? (
+            <GlassCard style={styles.emptyCard}>
+              <ActivityIndicator color={C.accent} />
+            </GlassCard>
+          ) : next ? (
             <GlassCard style={styles.nextCard}>
               <View style={[styles.nextColorBar, { backgroundColor: programColor }]} />
               <View style={styles.nextContent}>

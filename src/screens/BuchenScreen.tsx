@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Animated, Easing, Image,
+  Animated, Easing, Image, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -38,6 +38,8 @@ interface Props {
   trainers?: Array<{ id: string; trainer_specialty?: string | null }>;
   refreshSlotData?: () => Promise<void>;
   header?: React.ReactNode;
+  /** Initial-Load läuft noch — Spinner statt „Kein Nachholtermin verfügbar". */
+  loading?: boolean;
 }
 
 type Step = 'category' | 'program' | 'date' | 'time' | 'confirm' | 'done';
@@ -106,7 +108,7 @@ function isProgramAllowed(player: Player, programId: string): boolean {
   return true;
 }
 
-export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, activeTokens, addAppointment, setTab, trainerSchedules = [], trainers = [], refreshSlotData, header }: Props) {
+export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, activeTokens, addAppointment, setTab, trainerSchedules = [], trainers = [], refreshSlotData, header, loading = false }: Props) {
   const insets = useSafeAreaInsets();
   const { C } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
@@ -307,6 +309,16 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
     const visiblePrograms = effectiveCategory
       ? allowedPrograms.filter(p => PROGRAM_CATEGORY[p.id] === effectiveCategory)
       : allowedPrograms;
+
+    if (activeTokens.length === 0 && loading) {
+      // Tokens werden noch geladen — kein verfrühtes „Kein Nachholtermin verfügbar".
+      return (
+        <FadeUp>
+          <SectionTitle t="Nachholtermin buchen" />
+          <ActivityIndicator color={C.accent} style={{ marginTop: 32 }} />
+        </FadeUp>
+      );
+    }
 
     if (activeTokens.length === 0) {
       return (

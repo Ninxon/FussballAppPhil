@@ -193,6 +193,23 @@ export function useAppointments(activePlayer: Player | null) {
     if (playersData.data) setSlotPlayers(playersData.data as SlotPlayer[]);
   }, []);
 
+  // Vollständiger Neu-Fetch (Pull-to-Refresh): Slots + eigene Termine + Tokens.
+  const refetch = useCallback(async () => {
+    const pid = activePlayerIdRef.current;
+    const jobs: Promise<void>[] = [refreshSlotData()];
+    if (pid) {
+      jobs.push((async () => {
+        const [apptData, tokenData] = await Promise.all([
+          AppointmentService.fetchByPlayer(pid),
+          TokenService.fetchActive(pid),
+        ]);
+        setMyAppointments(((apptData.data ?? []) as Appointment[]).map(fmtTime));
+        setActiveTokens((tokenData.data ?? []) as CancellationToken[]);
+      })());
+    }
+    await Promise.all(jobs);
+  }, [refreshSlotData]);
+
   const addAppointment = async (
     date: string, time: string, program: string,
     location: Location | null = null,
@@ -311,5 +328,5 @@ export function useAppointments(activePlayer: Player | null) {
     return { error: null };
   };
 
-  return { slotCounts, slotPlayers, myAppointments, activeTokens, loading, addAppointment, cancelAppointment, refreshSlotData };
+  return { slotCounts, slotPlayers, myAppointments, activeTokens, loading, addAppointment, cancelAppointment, refreshSlotData, refetch };
 }

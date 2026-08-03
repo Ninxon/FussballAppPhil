@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
@@ -30,6 +30,10 @@ interface Props {
   activeTokens: CancellationToken[];
   setTab: (t: Tab) => void;
   header?: React.ReactNode;
+  /** Initial-Load läuft noch — Spinner statt „Noch keine Termine". */
+  loading?: boolean;
+  /** Pull-to-Refresh: lädt Termine, Tokens und Slots neu. */
+  onRefresh?: () => Promise<void>;
 }
 
 function getStyles(C: Colors) {
@@ -306,13 +310,20 @@ function ApptCard({ appt, onCancel }: { appt: Appointment; onCancel: (id: string
   );
 }
 
-export function TermineScreen({ appointments, cancelAppointment, activeTokens, setTab, header }: Props) {
+export function TermineScreen({ appointments, cancelAppointment, activeTokens, setTab, header, loading = false, onRefresh }: Props) {
   const { C } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
   const insets = useSafeAreaInsets();
   const [calM, setCalM] = useState(new Date().getMonth());
   const [calY, setCalY] = useState(new Date().getFullYear());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const doRefresh = async () => {
+    if (!onRefresh) return;
+    setRefreshing(true);
+    try { await onRefresh(); } finally { setRefreshing(false); }
+  };
 
   const ts = todayStr();
 
@@ -339,6 +350,9 @@ export function TermineScreen({ appointments, cancelAppointment, activeTokens, s
       style={[styles.flex, { backgroundColor: 'transparent' }]}
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 20, paddingBottom: 20 }]}
       showsVerticalScrollIndicator={false}
+      refreshControl={onRefresh && (
+        <RefreshControl refreshing={refreshing} onRefresh={doRefresh} tintColor={C.accent} colors={[C.accent]} />
+      ) || undefined}
     >
       <FadeIn>
         {header}
@@ -405,7 +419,9 @@ export function TermineScreen({ appointments, cancelAppointment, activeTokens, s
         ) : (
           <>
             {upcoming.length === 0 && past.length === 0 && (
-              <Text style={styles.emptyText}>Noch keine Termine vorhanden.</Text>
+              loading
+                ? <ActivityIndicator color={C.accent} style={{ marginTop: 24 }} />
+                : <Text style={styles.emptyText}>Noch keine Termine vorhanden.</Text>
             )}
             {upcoming.length > 0 && (
               <>
