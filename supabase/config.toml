@@ -109,14 +109,20 @@ port = 54324
 [storage]
 enabled = true
 # The maximum file size allowed (e.g. "5MB", "500KB").
-file_size_limit = "50MiB"
+file_size_limit = "200MiB"
 
-# Uncomment to configure local storage buckets
-# [storage.buckets.images]
-# public = false
-# file_size_limit = "50MiB"
-# allowed_mime_types = ["image/png", "image/jpeg"]
-# objects_path = "./images"
+# Video-Pakete: privat, Wiedergabe ausschliesslich ueber signierte Links.
+# Muss zu MAX_UPLOAD_BYTES in src/admin/services/videoValidation.ts passen.
+# Die produktive Konfiguration setzt 20260804_trainer_videos_bucket_private.sql.
+[storage.buckets.trainer-videos]
+public = false
+file_size_limit = "200MiB"
+allowed_mime_types = ["video/mp4", "video/webm", "video/quicktime", "video/x-msvideo", "video/x-matroska"]
+
+# Logo fuer die E-Mail-Vorlagen — bleibt bewusst oeffentlich, damit
+# Mail-Clients es ohne Login laden koennen.
+[storage.buckets.branding]
+public = true
 
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
