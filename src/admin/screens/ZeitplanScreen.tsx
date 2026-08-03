@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator } from 'react-native';
 import { TrainerSchedule, TrainerSpecialty } from '../../types';
-import { TrainerProfile } from '../hooks/useAdminData';
+import { TrainerProfile, MutationResult } from '../hooks/useAdminData';
 import { SLOTS } from '../../constants/slots';
 import { LOCATIONS, LOC_COLOR, Location } from '../../constants/studio';
 import { DE_MONTHS } from '../../constants/i18n';
@@ -38,7 +38,7 @@ interface Props {
   trainers: TrainerProfile[];
   trainerSchedules: TrainerSchedule[];
   trainerMonthlyCounts: Record<string, Record<string, number>>;
-  onSetSlot: (trainerId: string, day: number, time: string, location: Location | null) => Promise<{ error: unknown }>;
+  onSetSlot: (trainerId: string, day: number, time: string, location: Location | null) => Promise<MutationResult>;
   onCreateTrainer: (params: { full_name: string; email: string; specialty: TrainerSpecialty }) => Promise<{ error: string | null; tempPassword?: string }>;
   onUpdateTrainer: (trainerId: string, params: { full_name: string; trainer_specialty: TrainerSpecialty }) => Promise<{ error: string | null }>;
   onDeleteTrainer: (trainerId: string) => Promise<{ error: string | null; cancelledCount?: number }>;
@@ -112,10 +112,9 @@ export function ZeitplanScreen({ trainers, trainerSchedules, trainerMonthlyCount
     const { error } = await onSetSlot(selectedTrainerId, day, time, next);
     setToggling(null);
     if (error) {
-      const msg = (error as { message?: string })?.message ?? String(error);
       // PostgREST hängt teils Tabellen-Präfixe oder SQL-Codes an — wir zeigen
       // die reine Trigger-Botschaft, wenn wir sie isolieren können.
-      setSlotError(msg.replace(/^.*?:\s*/, ''));
+      setSlotError(error.replace(/^.*?:\s*/, ''));
     }
   };
 

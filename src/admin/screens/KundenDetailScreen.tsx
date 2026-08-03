@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Switch,
 } from 'react-native';
-import { CustomerProfile, AdminAppointment, TrainerProfile } from '../hooks/useAdminData';
+import { CustomerProfile, AdminAppointment, TrainerProfile, MutationResult } from '../hooks/useAdminData';
 import { PlayerLevel, PlayerType, LEVEL_COLORS, LEVEL_LABELS, BookingPermissions } from '../../types';
 import { PROGRAMS, PROGRAM_CATEGORY, PROGRAM_COLORS, ProgramId } from '../../constants/programs';
 import { SLOTS } from '../../constants/slots';
@@ -28,19 +28,19 @@ interface Props {
   trainers: TrainerProfile[];
   tokenCounts?: { individual: number; gruppe: number };
   onBack: () => void;
-  onCancelAppointment: (id: string, reason?: string) => Promise<{ error: any }>;
-  onAddAppointment: (userId: string, date: string, time: string, program: string, trainerId?: string | null, skipGroupCompat?: boolean) => Promise<{ error: any }>;
-  onAddRecurring: (userId: string, dates: string[], time: string, program: string, trainerId?: string | null, skipGroupCompat?: boolean) => Promise<{ error: { message: string } | null; conflicts: { date: string; reason: string }[]; created: number }>;
-  onSaveLevel: (customerId: string, level: PlayerLevel | null) => Promise<{ error: any }>;
-  onSaveBookingPermissions: (customerId: string, permissions: Partial<BookingPermissions>) => Promise<{ error: any }>;
-  onSaveGroupExempt: (customerId: string, value: boolean) => Promise<{ error: any }>;
-  onSaveProfile: (customerId: string, fields: Partial<Pick<CustomerProfile, 'full_name' | 'player_type' | 'parent_name' | 'location' | 'birth_date' | 'phone' | 'address'>>) => Promise<{ error: any }>;
-  onSaveEmail: (customerId: string, email: string) => Promise<{ error: { message: string } | null }>;
-  onToggleActive: (customerId: string, isActive: boolean) => Promise<{ error: any }>;
-  onResetTokens: (customerId: string) => Promise<{ error: any }>;
-  onGrantToken: (customerId: string, category: 'individual' | 'gruppe', expiresDate: string) => Promise<{ error: any }>;
-  onMarkAttended: (apptId: string, attended: boolean | null) => Promise<{ error: any }>;
-  onDeleteCustomer: (id: string) => Promise<{ error: string | null }>;
+  onCancelAppointment: (id: string, reason?: string) => Promise<MutationResult>;
+  onAddAppointment: (userId: string, date: string, time: string, program: string, trainerId?: string | null, skipGroupCompat?: boolean) => Promise<MutationResult>;
+  onAddRecurring: (userId: string, dates: string[], time: string, program: string, trainerId?: string | null, skipGroupCompat?: boolean) => Promise<{ error: string | null; conflicts: { date: string; reason: string }[]; created: number }>;
+  onSaveLevel: (customerId: string, level: PlayerLevel | null) => Promise<MutationResult>;
+  onSaveBookingPermissions: (customerId: string, permissions: Partial<BookingPermissions>) => Promise<MutationResult>;
+  onSaveGroupExempt: (customerId: string, value: boolean) => Promise<MutationResult>;
+  onSaveProfile: (customerId: string, fields: Partial<Pick<CustomerProfile, 'full_name' | 'player_type' | 'parent_name' | 'location' | 'birth_date' | 'phone' | 'address'>>) => Promise<MutationResult>;
+  onSaveEmail: (customerId: string, email: string) => Promise<MutationResult>;
+  onToggleActive: (customerId: string, isActive: boolean) => Promise<MutationResult>;
+  onResetTokens: (customerId: string) => Promise<MutationResult>;
+  onGrantToken: (customerId: string, category: 'individual' | 'gruppe', expiresDate: string) => Promise<MutationResult>;
+  onMarkAttended: (apptId: string, attended: boolean | null) => Promise<MutationResult>;
+  onDeleteCustomer: (id: string) => Promise<MutationResult>;
 }
 
 function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
@@ -61,7 +61,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
   );
 }
 
-function ApptRow({ appt, onCancel }: { appt: AdminAppointment; onCancel?: (id: string, reason?: string) => Promise<{ error: any }> }) {
+function ApptRow({ appt, onCancel }: { appt: AdminAppointment; onCancel?: (id: string, reason?: string) => Promise<MutationResult> }) {
   const prog = PROGRAMS.find(p => p.id === appt.program);
   const color = PROGRAM_COLORS[appt.program] ?? '#4A8FE8';
   const ts = todayStr();
@@ -78,7 +78,7 @@ function ApptRow({ appt, onCancel }: { appt: AdminAppointment; onCancel?: (id: s
     setLoading(true); setError(null);
     const { error: err } = await onCancel(appt.id, reason.trim() || undefined);
     setLoading(false);
-    if (err) setError(err.message ?? 'Fehler beim Stornieren.');
+    if (err) setError(err);
     else { setConfirming(false); setReason(''); }
   };
 
@@ -240,7 +240,7 @@ export function KundenDetailScreen({
       setBookingLoading(true);
       const { error, conflicts, created } = await onAddRecurring(customer.id, seriesDates, bookTime, bookProgram, bookTrainerId, bookSkipCompat);
       setBookingLoading(false);
-      if (error) { setBookingError(error.message); return; }
+      if (error) { setBookingError(error); return; }
       if (conflicts.length > 0) { setRecResult({ created: 0, conflicts }); return; }
       setRecResult({ created, conflicts: [] });
       setShowBooking(false); setBookDate(''); setBookingError(null);
@@ -253,7 +253,7 @@ export function KundenDetailScreen({
     setBookingLoading(true);
     const { error } = await onAddAppointment(customer.id, bookDate, bookTime, bookProgram, bookTrainerId, bookSkipCompat);
     setBookingLoading(false);
-    if (error) setBookingError(error.message ?? 'Buchung fehlgeschlagen.');
+    if (error) setBookingError(error);
     else { setShowBooking(false); setBookDate(''); setBookingError(null); setBookTrainerId(trainers[0]?.id ?? null); setBookSkipCompat(false); }
   };
 
@@ -262,19 +262,19 @@ export function KundenDetailScreen({
     setLevelError(null);
     const { error } = await onSaveLevel(customer.id, level);
     setLevelLoading(false);
-    if (error) setLevelError(error.message ?? 'Fehler beim Speichern.');
+    if (error) setLevelError(error);
   };
 
   const doTogglePermission = async (key: keyof BookingPermissions, value: boolean) => {
     setPermError(null);
     const { error } = await onSaveBookingPermissions(customer.id, { [key]: value });
-    if (error) setPermError(error.message ?? 'Fehler beim Speichern.');
+    if (error) setPermError(error);
   };
 
   const doToggleGroupExempt = async (value: boolean) => {
     setPermError(null);
     const { error } = await onSaveGroupExempt(customer.id, value);
-    if (error) setPermError(error.message ?? 'Fehler beim Speichern.');
+    if (error) setPermError(error);
   };
 
   const doSaveProfile = async () => {
@@ -306,7 +306,7 @@ export function KundenDetailScreen({
     });
     if (error) {
       setProfileLoading(false);
-      setProfileError((error as any).message ?? 'Fehler beim Speichern.');
+      setProfileError(error);
       return;
     }
     // E-Mail nur bei Änderung — zieht den Auth-User über die Edge Function mit.
@@ -314,7 +314,7 @@ export function KundenDetailScreen({
       const { error: mailErr } = await onSaveEmail(customer.id, emailTrimmed);
       if (mailErr) {
         setProfileLoading(false);
-        setProfileError(`Profil gespeichert, aber E-Mail-Änderung fehlgeschlagen: ${mailErr.message}`);
+        setProfileError(`Profil gespeichert, aber E-Mail-Änderung fehlgeschlagen: ${mailErr}`);
         return;
       }
     }
@@ -333,7 +333,7 @@ export function KundenDetailScreen({
     setTokenResetError(null);
     const { error } = await onResetTokens(customer.id);
     setTokenResetLoading(false);
-    if (error) setTokenResetError((error as any).message ?? 'Fehler beim Zurücksetzen.');
+    if (error) setTokenResetError(error);
     else setShowTokenReset(false);
   };
 
@@ -368,7 +368,7 @@ export function KundenDetailScreen({
     const { error } = await onGrantToken(customer.id, grantCategory, grantExpiry.trim());
     setGrantLoading(false);
     if (error) {
-      setGrantError((error as any).message ?? 'Fehler beim Vergeben.');
+      setGrantError(error);
     } else {
       setGrantSuccess(true);
       setShowGrant(false);

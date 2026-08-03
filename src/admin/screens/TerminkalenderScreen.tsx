@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, TextInput, useWindowDimensions,
 } from 'react-native';
-import { CustomerProfile, AdminAppointment, TrainerProfile } from '../hooks/useAdminData';
+import { CustomerProfile, AdminAppointment, TrainerProfile, MutationResult } from '../hooks/useAdminData';
 import { PROGRAMS, PROGRAM_CATEGORY, PROGRAM_COLORS, ProgramId } from '../../constants/programs';
 import { DE_DAYS_SHORT, DE_MONTHS } from '../../constants/i18n';
 import { fmtDateShort } from '../../utils/date';
@@ -79,8 +79,8 @@ interface Props {
   trainers:            TrainerProfile[];
   loading:             boolean;
   initialDay?:         string;
-  onCancelAppointment: (id: string, reason?: string) => Promise<{ error: any }>;
-  onAddAppointment:    (userId: string, date: string, time: string, program: string, trainerId?: string | null) => Promise<{ error: any }>;
+  onCancelAppointment: (id: string, reason?: string) => Promise<MutationResult>;
+  onAddAppointment:    (userId: string, date: string, time: string, program: string, trainerId?: string | null) => Promise<MutationResult>;
 }
 
 // Storno-Grund mit LOKALEM State: Tippen rendert nur dieses Panel neu, nicht
@@ -184,7 +184,7 @@ export function TerminkalenderScreen({
     setCancelLoading(true); setCancelError(null);
     const { error } = await onCancelAppointment(id, reason);
     setCancelLoading(false);
-    if (error) setCancelError(error.message ?? 'Fehler beim Stornieren.');
+    if (error) setCancelError(error);
     else { setSelectedApptId(null); setExpandedGroupKey(null); }
   };
 
@@ -212,7 +212,7 @@ export function TerminkalenderScreen({
     setBookingLoading(true); setBookingError(null); setBookingSuccess(false);
     const { error } = await onAddAppointment(bookCustomerId, bookingDay, bookTime, bookProgram, bookTrainerId);
     setBookingLoading(false);
-    if (error) setBookingError(error.message ?? 'Buchung fehlgeschlagen.');
+    if (error) setBookingError(error);
     else { setBookingSuccess(true); setBookCustomerId(null); setBookCustomerSearch(''); }
   };
 
