@@ -23,7 +23,12 @@ export function StorageMeter({ usage, onCleanupOrphans }: Props) {
   if (!usage) return null;
 
   const level = storageLevel(usage.total_bytes);
-  const share = Math.min(100, (usage.total_bytes / STORAGE_QUOTA_BYTES) * 100);
+  // Bei belegtem Speicher mindestens 1 % zeichnen, damit ein sehr kleiner
+  // Wert sichtbar bleibt — bei 0 Bytes aber gar nichts, sonst steht dort ein
+  // Punkt, der wie ein Darstellungsfehler aussieht.
+  const share = usage.total_bytes === 0
+    ? 0
+    : Math.max(1, Math.min(100, (usage.total_bytes / STORAGE_QUOTA_BYTES) * 100));
 
   const doCleanup = async () => {
     setCleaning(true);
@@ -47,7 +52,7 @@ export function StorageMeter({ usage, onCleanupOrphans }: Props) {
         </Text>
       </View>
       <View style={styles.meterTrack}>
-        <View style={[styles.meterFill, { width: `${Math.max(share, 1)}%`, backgroundColor: LEVEL_COLOR[level] }]} />
+        <View style={[styles.meterFill, { width: `${share}%`, backgroundColor: LEVEL_COLOR[level] }]} />
       </View>
       {level === 'warn' && (
         <Text style={styles.hint}>Über 70 % belegt — beim Hochladen auf die Dateigröße achten.</Text>
