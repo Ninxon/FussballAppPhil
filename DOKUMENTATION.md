@@ -164,8 +164,8 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 ```
 `EXPO_PUBLIC_` Präfix macht die Variable im App-Code verfügbar.
 
-### `web/index.html`
-HTML-Vorlage für den Web-Build. Enthält Sicherheits-Header:
+### `dist/index.html`
+Ausgelieferte HTML-Shell des Web-Builds (wird vom Deploy-Workflow restauriert). Enthält Sicherheits-Header und die PWA-Skripte (Service-Worker-Registrierung, Install-Prompt):
 - **Content-Security-Policy** — erlaubt nur vertrauenswürdige Scripts
 - **X-Frame-Options DENY** — verhindert Einbettung in fremde Seiten (Clickjacking)
 - **X-Content-Type-Options** — verhindert MIME-Sniffing
@@ -237,8 +237,8 @@ Die Prüfung passiert in der Datenbank — kein App-Code kann sie umgehen.
 | Maßnahme | Schutz gegen | Ort |
 |---|---|---|
 | HTTPS (am Server aktivieren) | Abhören von Daten | Hosting-Konfiguration |
-| Content-Security-Policy | XSS (Script-Einschleusung) | `web/index.html` |
-| X-Frame-Options DENY | Clickjacking | `web/index.html` |
+| Content-Security-Policy | XSS (Script-Einschleusung) | `dist/index.html` |
+| X-Frame-Options DENY | Clickjacking | `dist/.htaccess` |
 | API Keys in `.env` | Secrets im Git-Repository | `.env` + `.gitignore` |
 | expo-secure-store | Token-Diebstahl auf Mobil | `src/lib/supabase.ts` |
 | sessionStorage (Web) | Token bleibt nur im Tab | `src/lib/supabase.ts` |

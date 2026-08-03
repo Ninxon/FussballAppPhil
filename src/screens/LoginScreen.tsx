@@ -300,7 +300,7 @@ export function LoginScreen({ onLogin }: Props) {
   useEffect(() => {
     if (Platform.OS !== 'web') return;
 
-    // Prompt wurde möglicherweise bereits vor React-Mount gefangen (web/index.html)
+    // Prompt wurde möglicherweise bereits vor React-Mount gefangen (dist/index.html)
     if ((window as any)._pwaInstallPrompt) {
       installPromptRef.current = (window as any)._pwaInstallPrompt;
       setInstallPromptReady(true);

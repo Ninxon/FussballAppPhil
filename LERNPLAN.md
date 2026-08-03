@@ -142,8 +142,8 @@ Ein Angreifer probiert automatisiert tausende Passwörter aus.
 | Maßnahme | Schutz gegen | Wo im Code |
 |---|---|---|
 | HTTPS | MITM | Server-Konfiguration |
-| Content-Security-Policy | XSS | `web/index.html` |
-| X-Frame-Options DENY | Clickjacking | `web/index.html` |
+| Content-Security-Policy | XSS | `dist/index.html` |
+| X-Frame-Options DENY | Clickjacking | `dist/.htaccess` |
 | expo-secure-store | Token-Diebstahl (Mobil) | `src/lib/supabase.ts` |
 | sessionStorage statt localStorage | XSS (Web) | `src/lib/supabase.ts` |
 | API Keys in .env | Secrets im Code | `.env` + `.gitignore` |
