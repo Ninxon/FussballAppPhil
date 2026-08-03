@@ -99,6 +99,44 @@ export type AppNotification = {
   is_global: boolean;
 };
 
+// ── Video-Pakete ────────────────────────────────────────────────────────────
+// Ein Video liegt in der Bibliothek und gehoert keinem Trainer. Sichtbar wird
+// es ueber ein Paket, das einem Trainer zugewiesen ist.
+
+export type VideoAsset = {
+  id: string;
+  title: string;
+  description: string | null;
+  /** Externer Link; NULL, wenn die Datei im Storage liegt. */
+  url: string | null;
+  /** Objektpfad im Bucket 'trainer-videos'; NULL bei externem Link. */
+  storage_path: string | null;
+  mime_type?: string | null;
+  size_bytes?: number | null;
+  original_filename?: string | null;
+  created_at?: string;
+};
+
+export type VideoPackage = {
+  id: string;
+  title: string;
+  description: string | null;
+  created_at: string;
+  videos: VideoAsset[];
+};
+
+/** Ergaenzt ein Paket in der Admin-Sicht um die Verteilung. */
+export type AdminVideoPackage = VideoPackage & {
+  trainerIds: string[];
+};
+
+export type VideoStorageUsage = {
+  file_count: number;
+  total_bytes: number;
+  orphan_count: number;
+  orphan_bytes: number;
+};
+
 export type SlotCount = {
   date: string;
   time: string;

@@ -25,7 +25,7 @@ interface Props {
 // Die Tabs liegen in ./screens/, das Laden in ./useTrainerData.
 export function TrainerApp({ onLogout }: Props) {
   const [tab, setTab] = useState<Tab>('termine');
-  const { appointments, profile, videos, loading, error, reload } = useTrainerData();
+  const { appointments, profile, packages, loading, error, reload } = useTrainerData();
 
   const ts = todayStr();
   const todaySlots = React.useMemo(() => groupSlots(appointments.filter(a => a.date === ts)), [appointments, ts]);
@@ -60,7 +60,7 @@ export function TrainerApp({ onLogout }: Props) {
             {tab === 'termine' && (
               <TermineTab todaySlots={todaySlots} upcomingSlots={upcomingSlots} />
             )}
-            {tab === 'videos' && <VideosTab videos={videos} />}
+            {tab === 'videos' && <VideosTab packages={packages} />}
             {tab === 'profil' && profile && <ProfilTab profile={profile} />}
           </View>
 

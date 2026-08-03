@@ -103,6 +103,12 @@ export const styles = StyleSheet.create({
   videoOpenBtn: { backgroundColor: 'rgba(74,127,212,0.1)', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8, flexShrink: 0 },
   videoOpenBtnText: { fontSize: 13, fontWeight: '700', color: '#4A7FD4' },
 
+  // Video-Pakete
+  packageChevron: { fontSize: 22, color: '#9CA3AF', fontWeight: '300', paddingLeft: 8 },
+  backLink: { fontSize: 14, fontWeight: '700', color: '#4A7FD4' },
+  packageDetailTitle: { fontSize: 20, fontWeight: '800', color: '#111827', marginBottom: 6 },
+  packageDetailDesc: { fontSize: 14, color: '#6B7280', lineHeight: 20, marginBottom: 14 },
+
   // Bottom Nav
   bottomNav: {
     flexDirection: 'row',

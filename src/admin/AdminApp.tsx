@@ -8,7 +8,7 @@ import { KundenDetailScreen } from './screens/KundenDetailScreen';
 import { TerminkalenderScreen } from './screens/TerminkalenderScreen';
 import { NotificationsScreen } from './screens/NotificationsScreen';
 import { ZeitplanScreen } from './screens/ZeitplanScreen';
-import { TrainerVideosScreen } from './screens/TrainerVideosScreen';
+import { VideoPaketeScreen } from './screens/VideoPaketeScreen';
 
 interface Props {
   onLogout: () => void;
@@ -20,7 +20,7 @@ const NAV: { id: AdminTab; label: string }[] = [
   { id: 'kalender', label: 'Terminkalender' },
   { id: 'zeitplan', label: 'Zeitplan' },
   { id: 'infos', label: 'Infos' },
-  { id: 'videos', label: 'Trainer-Videos' },
+  { id: 'videos', label: 'Video-Pakete' },
 ];
 
 const TAB_LABELS: Record<AdminTab, string> = {
@@ -29,7 +29,7 @@ const TAB_LABELS: Record<AdminTab, string> = {
   kalender: 'Terminkalender',
   zeitplan: 'Trainerzeitplan',
   infos: 'Infos',
-  videos: 'Trainer-Videos',
+  videos: 'Video-Pakete',
 };
 
 export function AdminApp({ onLogout }: Props) {
@@ -170,7 +170,7 @@ export function AdminApp({ onLogout }: Props) {
         <NotificationsScreen />
       )}
       {tab === 'videos' && (
-        <TrainerVideosScreen trainers={trainers} />
+        <VideoPaketeScreen trainers={trainers} />
       )}
     </>
   );
