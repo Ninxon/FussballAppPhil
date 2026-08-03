@@ -8,6 +8,7 @@ import { PROGRAMS, PROGRAM_CATEGORY, PROGRAM_COLORS, ProgramId } from '../../con
 import { SLOTS } from '../../constants/slots';
 import { todayStr, fmtDate } from '../../utils/date';
 import { webInputReset } from '../../styles/webInput';
+import { PlayerTypeChips } from '../components/PlayerTypeChips';
 import { LOCATIONS, Location } from '../../constants/studio';
 import { generateRecurringDates, RecurrenceInterval } from '../../utils/recurrence';
 
@@ -19,11 +20,6 @@ const PERMISSION_FLAGS: { key: keyof BookingPermissions; label: string }[] = [
   { key: 'can_book_athletik', label: 'Athletiktraining' },
   { key: 'can_book_torhueter_individual', label: 'Torwart Individual' },
   { key: 'can_book_torhueter_gruppe', label: 'Torwart Gruppe' },
-];
-
-const PLAYER_TYPE_OPTIONS: { id: PlayerType; label: string }[] = [
-  { id: 'feldspieler', label: 'Feldspieler' },
-  { id: 'torwart', label: 'Torwart' },
 ];
 
 interface Props {
@@ -455,29 +451,7 @@ export function KundenDetailScreen({
             <Text style={styles.fieldLabel}>E-Mail *</Text>
             <TextInput style={styles.editInput} value={editEmail} onChangeText={setEditEmail} placeholder="max@beispiel.de" placeholderTextColor="#7A90AE" keyboardType="email-address" autoCapitalize="none" />
             <Text style={styles.fieldLabel}>Spielertyp</Text>
-            <View style={styles.typeRow}>
-              {PLAYER_TYPE_OPTIONS.map(opt => (
-                <TouchableOpacity
-                  key={opt.id}
-                  style={[styles.typeChip, editPlayerType === opt.id && styles.typeChipActive]}
-                  onPress={() => setEditPlayerType(opt.id)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[
-                    styles.typeChipAvatar,
-                    { backgroundColor: opt.id === 'torwart' ? 'rgba(155,89,182,0.15)' : 'rgba(74,143,232,0.15)' },
-                  ]}>
-                    <Text style={[
-                      styles.typeChipAvatarText,
-                      { color: opt.id === 'torwart' ? '#9B59B6' : '#4A8FE8' },
-                    ]}>
-                      {opt.id === 'torwart' ? 'T' : 'F'}
-                    </Text>
-                  </View>
-                  <Text style={[styles.typeChipText, editPlayerType === opt.id && styles.typeChipTextActive]}>{opt.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <PlayerTypeChips value={editPlayerType} onSelect={setEditPlayerType} compact />
             <Text style={styles.fieldLabel}>Elternname</Text>
             <TextInput style={styles.editInput} value={editParentName} onChangeText={setEditParentName} placeholder="Elternname" placeholderTextColor="#7A90AE" />
             <Text style={styles.fieldLabel}>Telefon</Text>
@@ -1006,8 +980,6 @@ const styles = StyleSheet.create({
   typeRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   typeChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 2, borderColor: 'rgba(21,34,56,0.08)', backgroundColor: '#F4F8FF' },
   typeChipActive: { borderColor: '#4A8FE8', backgroundColor: 'rgba(74,143,232,0.08)' },
-  typeChipAvatar: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  typeChipAvatarText: { fontSize: 12, fontWeight: '800' },
   typeChipText: { fontSize: 13, fontWeight: '700', color: '#4A6080' },
   typeChipTextActive: { color: '#4A8FE8' },
   levelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10 },

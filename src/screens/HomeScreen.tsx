@@ -1,10 +1,11 @@
-import React, { useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Animated, Easing } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 import { GlassCard } from '../components/GlassCard';
 import { Btn } from '../components/Btn';
+import { FadeIn } from '../components/FadeIn';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { Appointment, Tab, CancellationToken, Player } from '../types';
 import { todayStr, fmtDate } from '../utils/date';
 import { PROGRAMS, PROGRAM_COLORS } from '../constants/programs';
@@ -31,25 +32,6 @@ function daysUntil(isoDate: string): number {
 function getStyles(C: Colors) {
   return StyleSheet.create({
     flex: { flex: 1 },
-    header: {
-      paddingHorizontal: 24,
-      paddingBottom: 28,
-    },
-    headerSub: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: C.textFaint,
-      letterSpacing: 0.15,
-      marginBottom: 6,
-      textTransform: 'uppercase',
-    },
-    headerTitle: {
-      fontSize: 32,
-      fontWeight: '800',
-      color: C.text,
-      lineHeight: 38,
-      letterSpacing: -0.5,
-    },
     section: {
       paddingHorizontal: 20,
       paddingBottom: 16,
@@ -177,17 +159,7 @@ function getStyles(C: Colors) {
 export function HomeScreen({ appointments, player, activeTokens, setTab, header }: Props) {
   const { C } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
-  const insets = useSafeAreaInsets();
   const firstName = player?.name?.split(' ')[0] ?? '';
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(16)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 350, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 350, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-    ]).start();
-  }, []);
 
   const ts = todayStr();
   const next = [...appointments]
@@ -217,13 +189,10 @@ export function HomeScreen({ appointments, player, activeTokens, setTab, header 
       contentContainerStyle={{ paddingBottom: 16 }}
       showsVerticalScrollIndicator={false}
     >
-      <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <FadeIn>
 
         {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + 28 }]}>
-          <Text style={styles.headerSub}>PK Fussballschule</Text>
-          <Text style={styles.headerTitle}>Guten Tag,{'\n'}{firstName}!</Text>
-        </View>
+        <ScreenHeader>Guten Tag,{'\n'}{firstName}!</ScreenHeader>
 
         {header && <View style={{ paddingHorizontal: 20 }}>{header}</View>}
 
@@ -299,7 +268,7 @@ export function HomeScreen({ appointments, player, activeTokens, setTab, header 
           <Btn label="Meine Termine anzeigen" onPress={() => setTab('termine')} variant="ghost" />
         </View>
 
-      </Animated.View>
+      </FadeIn>
     </ScrollView>
   );
 }

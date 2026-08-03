@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 import { GlassCard } from '../components/GlassCard';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { supabase } from '../lib/supabase';
 import { AppNotification, Player } from '../types';
 import { fmtTimestampShort } from '../utils/date';
@@ -15,25 +15,6 @@ interface Props {
 function getStyles(C: Colors) {
   return StyleSheet.create({
     flex: { flex: 1 },
-    header: {
-      paddingHorizontal: 24,
-      paddingBottom: 28,
-    },
-    headerSub: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: C.textFaint,
-      letterSpacing: 0.15,
-      marginBottom: 6,
-      textTransform: 'uppercase',
-    },
-    headerTitle: {
-      fontSize: 32,
-      fontWeight: '800',
-      color: C.text,
-      lineHeight: 38,
-      letterSpacing: -0.5,
-    },
     content: { paddingHorizontal: 20 },
     emptyCard: {
       padding: 28,
@@ -72,7 +53,6 @@ function getStyles(C: Colors) {
 export function InfosScreen({ player }: Props) {
   const { C } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
-  const insets = useSafeAreaInsets();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -108,10 +88,7 @@ export function InfosScreen({ player }: Props) {
       contentContainerStyle={{ paddingBottom: 24 }}
       showsVerticalScrollIndicator={false}
     >
-      <View style={[styles.header, { paddingTop: insets.top + 28 }]}>
-        <Text style={styles.headerSub}>PK Fussballschule</Text>
-        <Text style={styles.headerTitle}>Infos &{'\n'}Neuigkeiten</Text>
-      </View>
+      <ScreenHeader>Infos &{'\n'}Neuigkeiten</ScreenHeader>
 
       <View style={styles.content}>
         {loading ? (

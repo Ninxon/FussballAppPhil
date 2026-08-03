@@ -10,14 +10,21 @@ import { useTheme } from '../contexts/ThemeContext';
 import { Card } from '../components/Card';
 import { GlassCard } from '../components/GlassCard';
 import { Btn } from '../components/Btn';
+import { FadeIn } from '../components/FadeIn';
 import { Appointment, SlotCount, SlotPlayer, CancellationToken, Tab, TrainerSchedule, Player } from '../types';
-import { DE_MONTHS, DE_DAYS_SHORT } from '../constants/i18n';
 import { todayStr, fmtDate, fmtShort } from '../utils/date';
+import { MonthCalendar, CalendarSizes } from '../components/MonthCalendar';
 import { PROGRAMS, PROGRAM_CATEGORY, CATEGORY_COLORS, ProgramId } from '../constants/programs';
 import { PROGRAM_IMAGES } from '../constants/programImages';
 import { germanHolidays, canJoinGroupSlot, reconstructGroups, isBlockedByPeriod } from '../utils/bookingRules';
 import { useBlockedPeriods } from '../hooks/useBlockedPeriods';
 import { LOCATIONS, LOC_COLOR, Location } from '../constants/studio';
+
+// Maße des Buchen-Kalenders (größere Nav-Buttons, kompaktere Zellen).
+const CAL_SIZES: CalendarSizes = {
+  navBtn: 44, navBtnRadius: 12, bodyPad: 14, bodyPadBottom: 16,
+  weekRowMargin: 6, weekLabelSize: 12, dayHeight: 44, dayRadius: 11, dayTextSize: 15,
+};
 
 interface Props {
   slotCounts: SlotCount[];
@@ -35,17 +42,9 @@ interface Props {
 
 type Step = 'category' | 'program' | 'date' | 'time' | 'confirm' | 'done';
 
+// Schritt-Einblendung; remountet pro Step (key), daher genügt die geteilte FadeIn.
 function FadeUp({ children }: { children: React.ReactNode }) {
-  const fade = useRef(new Animated.Value(0)).current;
-  const slide = useRef(new Animated.Value(16)).current;
-  useEffect(() => {
-    fade.setValue(0); slide.setValue(16);
-    Animated.parallel([
-      Animated.timing(fade, { toValue: 1, duration: 320, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-      Animated.timing(slide, { toValue: 0, duration: 320, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-    ]).start();
-  }, []);
-  return <Animated.View style={{ opacity: fade, transform: [{ translateY: slide }] }}>{children}</Animated.View>;
+  return <FadeIn duration={320}>{children}</FadeIn>;
 }
 
 function BackBtn({ onPress }: { onPress: () => void }) {
@@ -375,12 +374,6 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
 
   // ── DateStep ──────────────────────────────────────────────────
   function DateStep() {
-    const daysInMonth = new Date(calY, calM + 1, 0).getDate();
-    const firstDow = (new Date(calY, calM, 1).getDay() + 6) % 7;
-    const cells: (number | null)[] = [];
-    for (let i = 0; i < firstDow; i++) cells.push(null);
-    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-
     const prevMonth = () => { const d = new Date(calY, calM - 1); setCalM(d.getMonth()); setCalY(d.getFullYear()); };
     const nextMonth = () => { const d = new Date(calY, calM + 1); setCalM(d.getMonth()); setCalY(d.getFullYear()); };
 
@@ -392,59 +385,39 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
     // getDate() verwenden — das verschiebt in Berlin (UTC+1/+2) auf den Folgetag.
     const tokenMaxStr = activeToken ? activeToken.expires_at.slice(0, 10) : null;
 
+    // Nicht buchbar: Vergangenheit, Wochenende, Feiertag, Sperrzeitraum, nach Token-Frist.
+    const dayDisabled = (ds: string) => {
+      const [y, m, d] = ds.split('-').map(Number);
+      const dow = new Date(y, m - 1, d).getDay();
+      if (ds < ts) return true;
+      if (dow === 0 || dow === 6) return true;
+      if (germanHolidays(y).has(ds)) return true;
+      if (isBlockedByPeriod(ds, blockedPeriods)) return true;
+      return tokenMaxStr ? ds > tokenMaxStr : false;
+    };
+
     return (
       <FadeUp>
         <BackBtn onPress={() => setStep('program')} />
         <SectionTitle t="Datum wählen" sub={`${currentProgram?.name} · ${currentProgram?.duration} Min.`} />
         <Card>
-          <View style={styles.monthNav}>
-            <TouchableOpacity onPress={prevMonth} style={styles.navBtn} activeOpacity={0.8}>
-              <Text style={styles.navBtnText}>‹</Text>
-            </TouchableOpacity>
-            <Text style={styles.monthLabel}>{DE_MONTHS[calM]} {calY}</Text>
-            <TouchableOpacity onPress={nextMonth} style={styles.navBtn} activeOpacity={0.8}>
-              <Text style={styles.navBtnText}>›</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.calBody}>
-            <View style={styles.weekRow}>
-              {DE_DAYS_SHORT.map(d => (
-                <View key={d} style={styles.weekCell}>
-                  <Text maxFontSizeMultiplier={1.3} style={styles.weekLabel}>{d}</Text>
-                </View>
-              ))}
-            </View>
-            <View style={styles.dayGrid}>
-              {cells.map((d, i) => {
-                if (!d) return <View key={`empty-${i}`} style={styles.dayCell} />;
-                const ds = `${calY}-${String(calM + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                const dow = new Date(calY, calM, d).getDay();
-                const isPast = ds < ts;
-                const isWeekend = dow === 0 || dow === 6;
-                const isHoliday = germanHolidays(calY).has(ds);
-                const isBlocked = isBlockedByPeriod(ds, blockedPeriods);
-                const isAfterDeadline = tokenMaxStr ? ds > tokenMaxStr : false;
-                const isUserBooked = myAppointments.some(a => a.date === ds && a.status === 'confirmed');
-                const isSel = selDate === ds;
-                const isToday = ds === ts;
-                const disabled = isPast || isWeekend || isHoliday || isBlocked || isAfterDeadline;
-                return (
-                  <TouchableOpacity
-                    key={`day-${i}`}
-                    disabled={disabled}
-                    onPress={() => { setSelDate(ds); setStep('time'); }}
-                    activeOpacity={0.7}
-                    style={[styles.dayCell, isSel && styles.dayCellSelected, isToday && !isSel && styles.dayCellToday]}
-                  >
-                    <Text maxFontSizeMultiplier={1.3} style={[styles.dayText, disabled && styles.dayTextDisabled, isSel && styles.dayTextSelected, isToday && !isSel && styles.dayTextToday]}>
-                      {d}
-                    </Text>
-                    {isUserBooked && !disabled && <View style={styles.bookedDot} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
+          <MonthCalendar
+            year={calY}
+            month={calM}
+            onPrevMonth={prevMonth}
+            onNextMonth={nextMonth}
+            todayStr={ts}
+            selectedDate={selDate}
+            onSelectDate={ds => { setSelDate(ds); setStep('time'); }}
+            isDayDisabled={dayDisabled}
+            getDayDots={ds =>
+              !dayDisabled(ds) && myAppointments.some(a => a.date === ds && a.status === 'confirmed')
+                ? [C.accentLight]
+                : []
+            }
+            maxFontSizeMultiplier={1.3}
+            sizes={CAL_SIZES}
+          />
         </Card>
         {tokenMaxStr && (
           <View style={styles.tokenDeadlineHint}>
@@ -724,22 +697,6 @@ function getStyles(C: Colors) {
       marginBottom: 16,
     },
     programCtaText: { fontSize: 14, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
-    monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: C.cardBorder },
-    navBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: C.accentBg, borderWidth: 1, borderColor: C.cardBorder, alignItems: 'center', justifyContent: 'center' },
-    navBtnText: { fontSize: 20, fontWeight: '700', color: C.accent },
-    monthLabel: { fontSize: 17, fontWeight: '700', color: C.text },
-    calBody: { padding: 14, paddingBottom: 16 },
-    weekRow: { flexDirection: 'row', marginBottom: 6 },
-    weekCell: { flex: 1, alignItems: 'center' },
-    weekLabel: { fontSize: 12, fontWeight: '700', color: C.textMid },
-    dayGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-    dayCell: { width: '14.28%', height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 11 },
-    dayCellSelected: { backgroundColor: C.accent },
-    dayCellToday: { backgroundColor: C.accentBg },
-    dayText: { fontSize: 15, color: C.text, fontWeight: '400' },
-    dayTextDisabled: { color: C.textFaint },
-    dayTextSelected: { color: '#fff', fontWeight: '700' },
-    dayTextToday: { color: C.accent, fontWeight: '700' },
     slotGroupLabel: { fontSize: 12, fontWeight: '700', color: C.textFaint, textTransform: 'uppercase', letterSpacing: 0.1, marginBottom: 10 },
     filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 18 },
     slotLoc: { fontSize: 10, fontWeight: '700', marginTop: 2 },
@@ -784,7 +741,6 @@ function getStyles(C: Colors) {
     doneMeta: { fontSize: 16, color: C.textMid, marginBottom: 4 },
     emailNote: { paddingHorizontal: 20, paddingVertical: 14, marginVertical: 32, alignSelf: 'stretch' },
     emailNoteText: { fontSize: 15, color: C.text, textAlign: 'center', fontWeight: '500' },
-    bookedDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: C.accentLight, marginTop: 2 },
     tokenDeadlineHint: {
       marginTop: 10, paddingHorizontal: 14, paddingVertical: 10,
       backgroundColor: C.accentBg, borderRadius: 10,

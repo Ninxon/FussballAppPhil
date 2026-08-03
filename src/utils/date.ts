@@ -35,6 +35,19 @@ export function fmtTimestampShort(iso: string): string {
   return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+/**
+ * Zellen eines Monatsrasters (Montag-first): führende nulls für Leerzellen,
+ * dann die Tage 1..n.
+ */
+export function monthCells(year: number, month: number): (number | null)[] {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  return cells;
+}
+
 // PostgREST serializes native time columns as "HH:MM:SS" — normalize to "HH:MM".
 export const fmtTime = <T extends { time?: string | null }>(a: T): T =>
   ({ ...a, time: a.time ? a.time.slice(0, 5) : a.time });

@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Animated, Easing, KeyboardAvoidingView, Platform, ScrollView, Image,
+  KeyboardAvoidingView, Platform, ScrollView, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase, setRememberMe } from '../lib/supabase';
+import { Btn } from '../components/Btn';
+import { FadeIn } from '../components/FadeIn';
 
 interface Props {
   onLogin: () => void;
@@ -156,30 +158,6 @@ function getStyles(C: Colors) {
       color: C.textMid,
       fontWeight: '500',
     },
-    loginBtn: {
-      height: 56,
-      borderRadius: 16,
-      backgroundColor: C.accent,
-      alignItems: 'center',
-      justifyContent: 'center',
-      flexDirection: 'row',
-      gap: 10,
-      shadowColor: C.accent,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.26,
-      shadowRadius: 14,
-      elevation: 7,
-    },
-    loginBtnLabel: {
-      color: '#fff',
-      fontSize: 17,
-      fontWeight: '800',
-      letterSpacing: 0.1,
-    },
-    loginBtnArrow: {
-      color: 'rgba(255,255,255,0.65)',
-      fontSize: 22,
-    },
     forgotBtn: {
       alignItems: 'center',
       paddingVertical: 10,
@@ -287,16 +265,6 @@ export function LoginScreen({ onLogin }: Props) {
   const [installPromptReady, setInstallPromptReady] = useState(false);
   const [showIosHint, setShowIosHint] = useState(false);
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(24)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 400, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 400, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-    ]).start();
-  }, []);
-
   useEffect(() => {
     if (Platform.OS !== 'web') return;
 
@@ -381,7 +349,7 @@ export function LoginScreen({ onLogin }: Props) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        <FadeIn duration={400} offset={24}>
 
           {/* Brand Header */}
           <View style={styles.brand}>
@@ -420,16 +388,12 @@ export function LoginScreen({ onLogin }: Props) {
                       />
                     </View>
                     {!!forgotErr && <Text style={styles.errText}>{forgotErr}</Text>}
-                    <TouchableOpacity
+                    <Btn
+                      label="Reset-Link senden"
                       onPress={doForgotPassword}
-                      disabled={forgotLoading}
-                      activeOpacity={0.88}
-                      style={[styles.loginBtn, forgotLoading && { opacity: 0.7 }]}
-                    >
-                      <Text style={styles.loginBtnLabel}>
-                        {forgotLoading ? 'Wird gesendet…' : 'Reset-Link senden'}
-                      </Text>
-                    </TouchableOpacity>
+                      loading={forgotLoading}
+                      showArrow={false}
+                    />
                   </>
                 ) : (
                   <Text style={styles.successText}>
@@ -492,17 +456,7 @@ export function LoginScreen({ onLogin }: Props) {
 
                 {!!err && <Text style={styles.errText}>{err}</Text>}
 
-                <TouchableOpacity
-                  onPress={doLogin}
-                  disabled={loading}
-                  activeOpacity={0.88}
-                  style={[styles.loginBtn, loading && { opacity: 0.7 }]}
-                >
-                  <Text style={styles.loginBtnLabel}>
-                    {loading ? 'Wird angemeldet…' : 'Anmelden'}
-                  </Text>
-                  {!loading && <Text style={styles.loginBtnArrow}>→</Text>}
-                </TouchableOpacity>
+                <Btn label="Anmelden" onPress={doLogin} loading={loading} />
               </>
             )}
           </View>
@@ -536,7 +490,7 @@ export function LoginScreen({ onLogin }: Props) {
             <View style={styles.decorLine} />
           </View>
 
-        </Animated.View>
+        </FadeIn>
       </ScrollView>
     </KeyboardAvoidingView>
   );

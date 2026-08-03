@@ -5,6 +5,7 @@ import { LEVEL_COLORS, LEVEL_LABELS, PlayerLevel, PlayerType } from '../../types
 import { LOCATIONS, Location } from '../../constants/studio';
 import { todayStr } from '../../utils/date';
 import { webInputReset } from '../../styles/webInput';
+import { PlayerTypeChips } from '../components/PlayerTypeChips';
 
 interface Props {
   customers: CustomerProfile[];
@@ -23,11 +24,6 @@ interface Props {
     parent_id?: string;
   }) => Promise<{ error: string | null; tempPassword?: string; customerNumber?: number }>;
 }
-
-const PLAYER_TYPE_OPTIONS: { id: PlayerType; label: string }[] = [
-  { id: 'feldspieler', label: 'Feldspieler' },
-  { id: 'torwart', label: 'Torwart' },
-];
 
 export function KundenScreen({ customers, allAppointments, loading, onSelectCustomer, onCreateCustomer }: Props) {
   const [query, setQuery] = useState('');
@@ -250,31 +246,7 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
 
           {/* Torwart / Feldspieler */}
           <Text style={styles.fieldLabel}>Spielertyp *</Text>
-          <View style={styles.typeRow}>
-            {PLAYER_TYPE_OPTIONS.map(opt => (
-              <TouchableOpacity
-                key={opt.id}
-                style={[styles.typeChip, formPlayerType === opt.id && styles.typeChipActive]}
-                onPress={() => setFormPlayerType(opt.id)}
-                activeOpacity={0.7}
-              >
-                <View style={[
-                  styles.typeChipAvatar,
-                  { backgroundColor: opt.id === 'torwart' ? 'rgba(155,89,182,0.15)' : 'rgba(74,143,232,0.15)' },
-                ]}>
-                  <Text style={[
-                    styles.typeChipAvatarText,
-                    { color: opt.id === 'torwart' ? '#9B59B6' : '#4A8FE8' },
-                  ]}>
-                    {opt.id === 'torwart' ? 'T' : 'F'}
-                  </Text>
-                </View>
-                <Text style={[styles.typeChipText, formPlayerType === opt.id && styles.typeChipTextActive]}>
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <PlayerTypeChips value={formPlayerType} onSelect={setFormPlayerType} />
 
           {/* Standort */}
           <Text style={styles.fieldLabel}>Standort *</Text>
@@ -535,8 +507,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12, borderRadius: 10, borderWidth: 2, borderColor: 'rgba(21,34,56,0.08)', backgroundColor: '#F4F8FF',
   },
   typeChipActive: { borderColor: '#4A8FE8', backgroundColor: 'rgba(74,143,232,0.08)' },
-  typeChipAvatar: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  typeChipAvatarText: { fontSize: 13, fontWeight: '800' },
   typeChipText: { fontSize: 14, fontWeight: '700', color: '#4A6080' },
   typeChipTextActive: { color: '#4A8FE8' },
   formRow: { flexDirection: 'row', gap: 14, marginBottom: 0 },

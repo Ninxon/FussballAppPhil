@@ -1,4 +1,4 @@
-import { fmtDateShort, fmtTimestampShort, fmtTime } from '../utils/date';
+import { fmtDateShort, fmtTimestampShort, fmtTime, monthCells } from '../utils/date';
 
 describe('fmtDateShort', () => {
   it('formats YYYY-MM-DD as DD.MM.YYYY', () => {
@@ -36,5 +36,32 @@ describe('fmtTime', () => {
     const result = fmtTime(row);
     expect(row.time).toBe('09:15:00');
     expect(result.other).toBe(1);
+  });
+});
+
+describe('monthCells', () => {
+  it('starts Monday-first: June 2026 begins on a Monday (no leading nulls)', () => {
+    const cells = monthCells(2026, 5); // Juni 2026, 1.6. = Montag
+    expect(cells[0]).toBe(1);
+    expect(cells).toHaveLength(30);
+  });
+
+  it('pads leading nulls: August 2026 starts on a Saturday (5 nulls)', () => {
+    const cells = monthCells(2026, 7); // 1.8.2026 = Samstag
+    expect(cells.slice(0, 5)).toEqual([null, null, null, null, null]);
+    expect(cells[5]).toBe(1);
+    expect(cells.filter(c => c !== null)).toHaveLength(31);
+  });
+
+  it('handles leap February', () => {
+    const cells = monthCells(2024, 1); // Februar 2024, 29 Tage, 1.2. = Donnerstag
+    expect(cells.slice(0, 3)).toEqual([null, null, null]);
+    expect(cells.filter(c => c !== null)).toHaveLength(29);
+    expect(cells[cells.length - 1]).toBe(29);
+  });
+
+  it('handles non-leap February', () => {
+    const cells = monthCells(2026, 1);
+    expect(cells.filter(c => c !== null)).toHaveLength(28);
   });
 });
