@@ -69,3 +69,10 @@ export const CATEGORY_COLORS: Record<ProgramCategory, string> = {
   individual: '#4A8FE8',
   gruppe: '#3DBFA0',
 };
+
+// Farbe je Programm, abgeleitet aus PROGRAMS (eine Quelle statt lokaler Kopien).
+// Als Record<string, string>, weil `appointments.program` aus der DB als freier
+// String kommt und direkt zum Indexieren verwendet wird.
+export const PROGRAM_COLORS: Record<string, string> = Object.fromEntries(
+  PROGRAMS.map(p => [p.id, p.color]),
+);

@@ -1,16 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 import { GlassCard } from '../components/GlassCard';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { supabase } from '../lib/supabase';
 import { AppNotification, Player } from '../types';
-
-function fmtDate(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
+import { fmtTimestampShort } from '../utils/date';
 
 interface Props {
   player: Player | null;
@@ -19,25 +15,6 @@ interface Props {
 function getStyles(C: Colors) {
   return StyleSheet.create({
     flex: { flex: 1 },
-    header: {
-      paddingHorizontal: 24,
-      paddingBottom: 28,
-    },
-    headerSub: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: C.textFaint,
-      letterSpacing: 0.15,
-      marginBottom: 6,
-      textTransform: 'uppercase',
-    },
-    headerTitle: {
-      fontSize: 32,
-      fontWeight: '800',
-      color: C.text,
-      lineHeight: 38,
-      letterSpacing: -0.5,
-    },
     content: { paddingHorizontal: 20 },
     emptyCard: {
       padding: 28,
@@ -47,6 +24,7 @@ function getStyles(C: Colors) {
     emptyIconBar: { width: 28, height: 3, borderRadius: 2, backgroundColor: C.accent, opacity: 0.4 },
     emptyTitle: { fontSize: 17, fontWeight: '700', color: C.text, marginBottom: 6, textAlign: 'center' },
     emptySub: { fontSize: 14, color: C.textFaint, textAlign: 'center', lineHeight: 20 },
+    retryLink: { fontSize: 14, fontWeight: '700', color: C.accent, marginTop: 14, textAlign: 'center' },
     card: {
       padding: 20,
       marginBottom: 14,
@@ -75,20 +53,33 @@ function getStyles(C: Colors) {
 export function InfosScreen({ player }: Props) {
   const { C } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
-  const insets = useSafeAreaInsets();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    supabase
+  const loadNotifications = React.useCallback(async () => {
+    setLoadError(false);
+    const { data, error } = await supabase
       .from('notifications')
       .select('*')
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setNotifications((data ?? []) as AppNotification[]);
-        setLoading(false);
-      });
+      .order('created_at', { ascending: false });
+    if (error) {
+      setLoadError(true);
+    } else {
+      setNotifications((data ?? []) as AppNotification[]);
+    }
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
+
+  const doRefresh = async () => {
+    setRefreshing(true);
+    try { await loadNotifications(); } finally { setRefreshing(false); }
+  };
 
   const visibleNotifications = notifications.filter(n =>
     !n.location || n.location === player?.location
@@ -99,15 +90,21 @@ export function InfosScreen({ player }: Props) {
       style={[styles.flex, { backgroundColor: 'transparent' }]}
       contentContainerStyle={{ paddingBottom: 24 }}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={doRefresh} tintColor={C.accentLight} colors={[C.accentLight]} />
+      }
     >
-      <View style={[styles.header, { paddingTop: insets.top + 28 }]}>
-        <Text style={styles.headerSub}>PK Fussballschule</Text>
-        <Text style={styles.headerTitle}>Infos &{'\n'}Neuigkeiten</Text>
-      </View>
+      <ScreenHeader>Infos &{'\n'}Neuigkeiten</ScreenHeader>
 
       <View style={styles.content}>
         {loading ? (
           <ActivityIndicator color={C.accentLight} style={{ marginTop: 40 }} />
+        ) : loadError ? (
+          <GlassCard style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>Infos konnten nicht geladen werden</Text>
+            <Text style={styles.emptySub}>Bitte überprüfe deine Internetverbindung.</Text>
+            <Text style={styles.retryLink} onPress={() => { setLoading(true); loadNotifications(); }}>Erneut versuchen</Text>
+          </GlassCard>
         ) : visibleNotifications.length === 0 ? (
           <GlassCard style={styles.emptyCard}>
             <View style={styles.emptyIcon}>
@@ -121,7 +118,7 @@ export function InfosScreen({ player }: Props) {
           visibleNotifications.map(n => (
             <GlassCard key={n.id} style={styles.card}>
               <View style={styles.cardTop}>
-                <Text style={styles.cardDate}>{fmtDate(n.created_at)}</Text>
+                <Text style={styles.cardDate}>{fmtTimestampShort(n.created_at)}</Text>
                 {n.location && (
                   <View style={styles.locationBadge}>
                     <Text style={styles.locationText}>📍 {n.location}</Text>

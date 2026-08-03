@@ -116,6 +116,11 @@ describe('germanHolidays', () => {
   test('enthält genau 10 Feiertage (inkl. Fronleichnam)', () => {
     expect(germanHolidays(2026).size).toBe(10);
   });
+
+  test('cached: gleiche Set-Instanz pro Jahr (Kalender ruft pro Zelle auf)', () => {
+    expect(germanHolidays(2027)).toBe(germanHolidays(2027));
+    expect(germanHolidays(2027)).not.toBe(germanHolidays(2028));
+  });
 });
 
 // ── Buchbarer Tag ────────────────────────────────────────────────────────────

@@ -62,7 +62,19 @@ export function easterDate(year: number): Date {
   return new Date(year, month - 1, day);
 }
 
+// Pro Jahr einmal berechnen — die Kalender-Raster rufen germanHolidays pro
+// Zelle auf, und der Gauß-Oster-Algorithmus muss dafür nicht 42x laufen.
+const holidayCache = new Map<number, Set<string>>();
+
 export function germanHolidays(year: number): Set<string> {
+  const cached = holidayCache.get(year);
+  if (cached) return cached;
+  const result = computeGermanHolidays(year);
+  holidayCache.set(year, result);
+  return result;
+}
+
+function computeGermanHolidays(year: number): Set<string> {
   const e = easterDate(year);
   const add = (dt: Date, n: number) => {
     const r = new Date(dt);

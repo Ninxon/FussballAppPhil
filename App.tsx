@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, StyleSheet, Platform, ActivityIndicator,
+  View, Text, StyleSheet, Platform, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -10,7 +10,6 @@ import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { supabase, isPasswordRecoveryUrl } from './src/lib/supabase';
 import { Tab } from './src/types';
 import { useAppointments } from './src/hooks/useAppointments';
-import { useProfile } from './src/hooks/useProfile';
 import { usePlayers } from './src/hooks/usePlayers';
 import { useTrainerSchedules } from './src/hooks/useTrainerSchedules';
 import { PlayerSwitcher } from './src/components/PlayerSwitcher';
@@ -41,6 +40,17 @@ function getAppStyles(C: Colors) {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    roleErrorText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: C.textMid,
+      marginBottom: 10,
+    },
+    roleErrorRetry: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: C.accent,
     },
     gradient: {
       flex: 1,
@@ -75,14 +85,20 @@ function AppInner() {
   const styles = React.useMemo(() => getAppStyles(C), [C]);
 
   const [loggedIn, setLoggedIn] = useState(false);
+  // Erst nach getSession() rendern wir Login oder App — verhindert den
+  // LoginScreen-Flash für Nutzer mit gültiger Session beim Kaltstart.
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [role, setRole] = useState<'admin' | 'customer' | 'trainer' | null>(null);
+  const [roleError, setRoleError] = useState(false);
+  const userIdRef = useRef<string | null>(null);
   // Init aus der URL (synchron beim Modul-Load erfasst), damit ein Recovery-Link
   // nicht wegen verpasstem PASSWORD_RECOVERY-Event als normaler Login durchrutscht.
   const [passwordRecovery, setPasswordRecovery] = useState(isPasswordRecoveryUrl);
   const [tab, setTab] = useState<Tab>('home');
-  const { profile } = useProfile();
-  const { players, activePlayer, activePlayerId, setActivePlayer } = usePlayers();
-  const { slotCounts, slotPlayers, myAppointments, activeTokens, addAppointment, cancelAppointment, refreshSlotData } = useAppointments(activePlayer);
+  const { players, activePlayer, activePlayerId, setActivePlayer, loading: playersLoading } = usePlayers();
+  const { slotCounts, slotPlayers, myAppointments, activeTokens, addAppointment, cancelAppointment, refreshSlotData, refetch, loading: apptsLoading } = useAppointments(activePlayer);
+  // Initial-Load der Kundendaten: solange keine leeren Zustände zeigen.
+  const dataLoading = playersLoading || apptsLoading;
   const { trainerSchedules, trainers: trainerProfiles } = useTrainerSchedules();
 
   const switcher = (
@@ -92,6 +108,7 @@ function AppInner() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setLoggedIn(!!session);
+      setSessionChecked(true);
       if (session) fetchRole(session.user.id);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -109,7 +126,17 @@ function AppInner() {
   }, []);
 
   const fetchRole = async (userId: string) => {
-    const { data } = await supabase.from('profiles').select('role').eq('id', userId).single();
+    userIdRef.current = userId;
+    setRoleError(false);
+    const { data, error } = await supabase.from('profiles').select('role').eq('id', userId).single();
+    // 'PGRST116' = keine Zeile gefunden → legitimer Default 'customer'.
+    // Alle anderen Fehler (Netzwerk etc.) dürfen einen Admin nicht stumm
+    // in die Kunden-App schicken — stattdessen Retry anbieten.
+    if (error && error.code !== 'PGRST116') {
+      setRole(null);
+      setRoleError(true);
+      return;
+    }
     setRole((data?.role as 'admin' | 'customer' | 'trainer') ?? 'customer');
   };
 
@@ -165,8 +192,22 @@ function AppInner() {
     >
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
-      {!loggedIn ? (
+      {!sessionChecked ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color={C.accent} />
+        </View>
+      ) : !loggedIn ? (
         <LoginScreen onLogin={() => {}} />
+      ) : roleError ? (
+        <View style={styles.loadingWrap}>
+          <Text style={styles.roleErrorText}>Verbindung fehlgeschlagen.</Text>
+          <Text
+            style={styles.roleErrorRetry}
+            onPress={() => { if (userIdRef.current) fetchRole(userIdRef.current); }}
+          >
+            Erneut versuchen
+          </Text>
+        </View>
       ) : role === null ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={C.accent} />
@@ -181,6 +222,8 @@ function AppInner() {
                 activeTokens={activeTokens}
                 setTab={setTab}
                 header={switcher}
+                loading={dataLoading}
+                onRefresh={refetch}
               />
             )}
             {tab === 'termine' && (
@@ -190,6 +233,8 @@ function AppInner() {
                 activeTokens={activeTokens}
                 setTab={setTab}
                 header={switcher}
+                loading={dataLoading}
+                onRefresh={refetch}
               />
             )}
             {tab === 'buchen' && (
@@ -206,6 +251,7 @@ function AppInner() {
                 trainers={trainerProfiles}
                 refreshSlotData={refreshSlotData}
                 header={switcher}
+                loading={dataLoading}
               />
             )}
             {tab === 'infos' && (

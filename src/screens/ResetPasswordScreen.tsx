@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
+import { Btn } from '../components/Btn';
 
 interface Props {
   onDone: () => void;
@@ -75,19 +76,6 @@ function getStyles(C: Colors) {
     successIcon: { fontSize: 28, marginBottom: 4 },
     successTitle: { fontSize: 16, fontWeight: '800', color: C.accent },
     successSub: { fontSize: 13, color: C.textMid, textAlign: 'center', lineHeight: 18 },
-    saveBtn: {
-      height: 56,
-      borderRadius: 16,
-      backgroundColor: C.accent,
-      alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: C.accent,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.26,
-      shadowRadius: 14,
-      elevation: 7,
-    },
-    saveBtnLabel: { color: '#fff', fontSize: 17, fontWeight: '800', letterSpacing: 0.1 },
     decorRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
     decorLine: { flex: 1, height: 1, backgroundColor: C.cardBorder },
     decorText: { fontSize: 11, color: C.textFaint, fontWeight: '500', letterSpacing: 0.3 },
@@ -108,6 +96,11 @@ export function ResetPasswordScreen({ onDone }: Props) {
   // die Recovery-Session baut detectSessionInUrl aber erst asynchron auf. Erst
   // wenn sie steht, darf updateUser laufen (sonst „Auth session missing").
   const [sessionReady, setSessionReady] = useState(false);
+  const doneTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (doneTimer.current) clearTimeout(doneTimer.current);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -142,7 +135,7 @@ export function ResetPasswordScreen({ onDone }: Props) {
       );
     } else {
       setSuccess(true);
-      setTimeout(() => onDone(), 1800);
+      doneTimer.current = setTimeout(() => onDone(), 1800);
     }
   };
 
@@ -202,16 +195,13 @@ export function ResetPasswordScreen({ onDone }: Props) {
 
               {!!err && <Text style={styles.errText}>{err}</Text>}
 
-              <TouchableOpacity
+              <Btn
+                label={!sessionReady ? 'Link wird geprüft…' : 'Passwort speichern'}
                 onPress={doReset}
-                disabled={loading || !sessionReady}
-                activeOpacity={0.88}
-                style={[styles.saveBtn, (loading || !sessionReady) && { opacity: 0.7 }]}
-              >
-                <Text style={styles.saveBtnLabel}>
-                  {loading ? 'Wird gespeichert…' : !sessionReady ? 'Link wird geprüft…' : 'Passwort speichern'}
-                </Text>
-              </TouchableOpacity>
+                loading={loading}
+                disabled={!sessionReady}
+                showArrow={false}
+              />
             </>
           )}
         </View>

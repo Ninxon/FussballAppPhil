@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { TrainerProfile } from '../hooks/useAdminData';
+import { webInputReset } from '../../styles/webInput';
 
 type TrainerVideo = {
   id: string;
@@ -399,8 +400,8 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 12, fontWeight: '700', color: '#4A6080', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, marginTop: 12 },
   input: {
     backgroundColor: '#F4F8FF', borderWidth: 1, borderColor: 'rgba(21,34,56,0.08)',
-    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#152238', outlineWidth: 0,
-  } as any,
+    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#152238', ...webInputReset,
+  },
   inputMulti: { minHeight: 72, textAlignVertical: 'top' },
   filePickerBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 10,

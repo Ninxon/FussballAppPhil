@@ -13,7 +13,7 @@
         script-src 'self' 'unsafe-inline';
         style-src 'self' 'unsafe-inline';
         img-src 'self' data: https: blob:;
-        connect-src 'self' https://*.supabase.co wss://*.supabase.co https://mgdrbgtsaqhgrdsnpasv.supabase.co https://api.anthropic.com;
+        connect-src 'self' https://*.supabase.co wss://*.supabase.co https://mgdrbgtsaqhgrdsnpasv.supabase.co;
         font-src 'self' data:;
         frame-src 'none';
         object-src 'none';
@@ -33,6 +33,9 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <meta name="theme-color" content="#1C2133" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="PK-Fußball" />
 
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
@@ -59,6 +62,18 @@
       You need to enable JavaScript to run this app.
     </noscript>
     <div id="root"></div>
+  <script>
+    // Service Worker registrieren (Offline-Cache + PWA-Installierbarkeit)
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+    }
+    // beforeinstallprompt früh abfangen, bevor React gemountet ist —
+    // LoginScreen liest window._pwaInstallPrompt für den Install-Button.
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      window._pwaInstallPrompt = e;
+    });
+  </script>
   <script src="/_expo/static/js/web/AppEntry-c3c69d17d6d1c3b1c40e2636f3b123ab.js" defer></script>
 </body>
 </html>

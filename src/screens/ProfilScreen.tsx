@@ -1,13 +1,13 @@
 import React, { useRef, useEffect, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Animated, Easing, TextInput,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 import { Card } from '../components/Card';
 import { Btn } from '../components/Btn';
+import { FadeIn } from '../components/FadeIn';
 import { useProfile } from '../hooks/useProfile';
 import { supabase } from '../lib/supabase';
 import { STUDIO } from '../constants/studio';
@@ -53,11 +53,6 @@ function calcAge(birthDate: string | null): string {
   return `${age} Jahre`;
 }
 
-function fmtDate(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
 // Übersetzt die (englischen) Supabase-Auth-Fehler in handlungsleitende Meldungen.
 // Wichtigster Fall: abgelaufene/fehlende Session -> "erneut versuchen" hilft NICHT,
 // der Kunde muss sich neu anmelden.
@@ -90,8 +85,6 @@ export function ProfilScreen({ onLogout, players }: Props) {
   const insets = useSafeAreaInsets();
   const { C, isDark, toggleTheme } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(16)).current;
   const { profile, loading } = useProfile();
 
   const [pwOpen, setPwOpen] = useState(false);
@@ -105,12 +98,10 @@ export function ProfilScreen({ onLogout, players }: Props) {
   const [editPhone, setEditPhone] = useState('');
   const [contactLoading, setContactLoading] = useState(false);
   const [contactMsg, setContactMsg] = useState('');
+  const pwSuccessTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 350, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 350, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-    ]).start();
+  useEffect(() => () => {
+    if (pwSuccessTimer.current) clearTimeout(pwSuccessTimer.current);
   }, []);
 
   useEffect(() => {
@@ -148,7 +139,7 @@ export function ProfilScreen({ onLogout, players }: Props) {
       setConfirmPw('');
       setPwOpen(false);
       setPwSuccess(true);
-      setTimeout(() => setPwSuccess(false), 3000);
+      pwSuccessTimer.current = setTimeout(() => setPwSuccess(false), 3000);
     }
   };
 
@@ -207,7 +198,7 @@ export function ProfilScreen({ onLogout, players }: Props) {
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
-      <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <FadeIn>
         <Text style={styles.screenTitle}>Profil</Text>
 
         {/* Avatar Card */}
@@ -364,7 +355,7 @@ export function ProfilScreen({ onLogout, players }: Props) {
         </SectionCard>
 
         <Btn label="Abmelden" onPress={onLogout} variant="ghost" />
-      </Animated.View>
+      </FadeIn>
     </ScrollView>
   );
 }

@@ -1,13 +1,14 @@
-import React, { useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Animated, Easing } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 import { GlassCard } from '../components/GlassCard';
 import { Btn } from '../components/Btn';
+import { FadeIn } from '../components/FadeIn';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { Appointment, Tab, CancellationToken, Player } from '../types';
-import { todayStr, fmtDate } from '../constants/i18n';
-import { PROGRAMS } from '../constants/programs';
+import { todayStr, fmtDate } from '../utils/date';
+import { PROGRAMS, PROGRAM_COLORS } from '../constants/programs';
 
 interface Props {
   appointments: Appointment[];
@@ -15,6 +16,10 @@ interface Props {
   activeTokens: CancellationToken[];
   setTab: (t: Tab) => void;
   header?: React.ReactNode;
+  /** Initial-Load läuft noch — Spinner statt leerer Zustände zeigen. */
+  loading?: boolean;
+  /** Pull-to-Refresh: lädt Termine, Tokens und Slots neu. */
+  onRefresh?: () => Promise<void>;
 }
 
 function daysUntil(isoDate: string): number {
@@ -28,36 +33,9 @@ function daysUntil(isoDate: string): number {
   return Math.round((target.getTime() - today.getTime()) / 86400000);
 }
 
-const PROGRAM_COLORS: Record<string, string> = {
-  individual:           '#4A8FE8',
-  gruppe:               '#3DBFA0',
-  athletik:             '#F5A84A',
-  torhueter_individual: '#E87676',
-  torhueter_gruppe:     '#9B59B6',
-};
-
 function getStyles(C: Colors) {
   return StyleSheet.create({
     flex: { flex: 1 },
-    header: {
-      paddingHorizontal: 24,
-      paddingBottom: 28,
-    },
-    headerSub: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: C.textFaint,
-      letterSpacing: 0.15,
-      marginBottom: 6,
-      textTransform: 'uppercase',
-    },
-    headerTitle: {
-      fontSize: 32,
-      fontWeight: '800',
-      color: C.text,
-      lineHeight: 38,
-      letterSpacing: -0.5,
-    },
     section: {
       paddingHorizontal: 20,
       paddingBottom: 16,
@@ -173,7 +151,6 @@ function getStyles(C: Colors) {
     emptyTitle: { fontSize: 17, fontWeight: '700', color: C.text, marginBottom: 4, textAlign: 'center' },
     emptySub: { fontSize: 14, color: C.textFaint, textAlign: 'center', lineHeight: 20 },
     btns: { paddingHorizontal: 20 },
-    btnDisabled: { opacity: 0.45 },
     noQuotaHint: {
       fontSize: 12,
       color: C.textFaint,
@@ -183,20 +160,17 @@ function getStyles(C: Colors) {
   });
 }
 
-export function HomeScreen({ appointments, player, activeTokens, setTab, header }: Props) {
+export function HomeScreen({ appointments, player, activeTokens, setTab, header, loading = false, onRefresh }: Props) {
   const { C } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
-  const insets = useSafeAreaInsets();
   const firstName = player?.name?.split(' ')[0] ?? '';
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(16)).current;
+  const [refreshing, setRefreshing] = React.useState(false);
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 350, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 350, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-    ]).start();
-  }, []);
+  const doRefresh = async () => {
+    if (!onRefresh) return;
+    setRefreshing(true);
+    try { await onRefresh(); } finally { setRefreshing(false); }
+  };
 
   const ts = todayStr();
   const next = [...appointments]
@@ -225,14 +199,14 @@ export function HomeScreen({ appointments, player, activeTokens, setTab, header 
       style={[styles.flex, { backgroundColor: 'transparent' }]}
       contentContainerStyle={{ paddingBottom: 16 }}
       showsVerticalScrollIndicator={false}
+      refreshControl={onRefresh && (
+        <RefreshControl refreshing={refreshing} onRefresh={doRefresh} tintColor={C.accent} colors={[C.accent]} />
+      ) || undefined}
     >
-      <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <FadeIn>
 
         {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + 28 }]}>
-          <Text style={styles.headerSub}>PK Fussballschule</Text>
-          <Text style={styles.headerTitle}>Guten Tag,{'\n'}{firstName}!</Text>
-        </View>
+        <ScreenHeader>Guten Tag,{'\n'}{firstName}!</ScreenHeader>
 
         {header && <View style={{ paddingHorizontal: 20 }}>{header}</View>}
 
@@ -263,7 +237,11 @@ export function HomeScreen({ appointments, player, activeTokens, setTab, header 
 
         {/* Nächster Termin */}
         <View style={styles.section}>
-          {next ? (
+          {loading ? (
+            <GlassCard style={styles.emptyCard}>
+              <ActivityIndicator color={C.accent} />
+            </GlassCard>
+          ) : next ? (
             <GlassCard style={styles.nextCard}>
               <View style={[styles.nextColorBar, { backgroundColor: programColor }]} />
               <View style={styles.nextContent}>
@@ -299,7 +277,7 @@ export function HomeScreen({ appointments, player, activeTokens, setTab, header 
             label="Nachholtermin buchen"
             onPress={() => setTab('buchen')}
             variant={buchenActive ? 'primary' : 'ghost'}
-            style={!buchenActive ? styles.btnDisabled : undefined}
+            disabled={!buchenActive}
           />
           {!buchenActive && (
             <Text style={styles.noQuotaHint}>Kein Nachholtermin verfügbar</Text>
@@ -308,7 +286,7 @@ export function HomeScreen({ appointments, player, activeTokens, setTab, header 
           <Btn label="Meine Termine anzeigen" onPress={() => setTab('termine')} variant="ghost" />
         </View>
 
-      </Animated.View>
+      </FadeIn>
     </ScrollView>
   );
 }

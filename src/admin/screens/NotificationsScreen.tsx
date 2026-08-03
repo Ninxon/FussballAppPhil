@@ -3,11 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Activi
 import { supabase } from '../../lib/supabase';
 import { AppNotification } from '../../types';
 import { LOCATIONS, Location } from '../../constants/studio';
-
-function fmtDate(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
+import { fmtTimestampShort } from '../../utils/date';
+import { webInputReset } from '../../styles/webInput';
 
 export function NotificationsScreen() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -18,15 +15,23 @@ export function NotificationsScreen() {
   const [formLocation, setFormLocation] = useState<Location | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => { loadNotifications(); }, []);
 
   const loadNotifications = async () => {
-    const { data } = await supabase
+    setLoading(true);
+    setLoadError(false);
+    const { data, error } = await supabase
       .from('notifications')
       .select('*')
       .order('created_at', { ascending: false });
-    setNotifications((data ?? []) as AppNotification[]);
+    if (error) {
+      setLoadError(true);
+    } else {
+      setNotifications((data ?? []) as AppNotification[]);
+    }
     setLoading(false);
   };
 
@@ -60,7 +65,12 @@ export function NotificationsScreen() {
   };
 
   const doDelete = async (id: string) => {
-    await supabase.from('notifications').delete().eq('id', id);
+    setDeleteError(null);
+    const { error } = await supabase.from('notifications').delete().eq('id', id);
+    if (error) {
+      setDeleteError('Löschen fehlgeschlagen: ' + error.message);
+      return;
+    }
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
@@ -129,13 +139,22 @@ export function NotificationsScreen() {
 
       <Text style={styles.sectionTitle}>Veröffentlichte Infos ({notifications.length})</Text>
 
-      {notifications.length === 0 ? (
+      {deleteError && <Text style={styles.errorText}>{deleteError}</Text>}
+
+      {loadError ? (
+        <View>
+          <Text style={styles.empty}>Infos konnten nicht geladen werden.</Text>
+          <TouchableOpacity onPress={loadNotifications} activeOpacity={0.7}>
+            <Text style={styles.retryText}>Erneut versuchen</Text>
+          </TouchableOpacity>
+        </View>
+      ) : notifications.length === 0 ? (
         <Text style={styles.empty}>Noch keine Infos veröffentlicht.</Text>
       ) : (
         notifications.map(n => (
           <View key={n.id} style={styles.notifCard}>
             <View style={styles.notifHeader}>
-              <Text style={styles.notifDate}>{fmtDate(n.created_at)}</Text>
+              <Text style={styles.notifDate}>{fmtTimestampShort(n.created_at)}</Text>
               {n.location && (
                 <View style={styles.locationBadge}>
                   <Text style={styles.locationText}>{n.location}</Text>
@@ -174,8 +193,8 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 12, fontWeight: '700', color: '#4A6080', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6, marginTop: 10 },
   input: {
     backgroundColor: '#F4F8FF', borderWidth: 1, borderColor: 'rgba(21,34,56,0.08)',
-    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#152238', outlineWidth: 0,
-  } as any,
+    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#152238', ...webInputReset,
+  },
   textArea: { minHeight: 90, textAlignVertical: 'top' },
   errorText: { fontSize: 13, color: '#EF4444', fontWeight: '600', marginTop: 10 },
   saveBtn: {
@@ -186,6 +205,7 @@ const styles = StyleSheet.create({
   saveBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#152238', marginBottom: 14 },
   empty: { color: '#7A90AE', fontSize: 14, textAlign: 'center', paddingVertical: 24 },
+  retryText: { color: '#4A8FE8', fontSize: 14, fontWeight: '700', textAlign: 'center', paddingBottom: 16 },
   notifCard: {
     backgroundColor: '#fff', borderRadius: 14, padding: 18, marginBottom: 12,
     shadowColor: '#152238', shadowOpacity: 0.04, shadowOffset: { width: 0, height: 1 }, shadowRadius: 4, elevation: 1,

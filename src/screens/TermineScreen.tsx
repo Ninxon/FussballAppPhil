@@ -1,20 +1,28 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, Easing } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 import { Card } from '../components/Card';
 import { Btn } from '../components/Btn';
 import { Appointment, CancellationToken, Tab } from '../types';
-import { todayStr, fmtDate, DE_MONTHS, DE_DAYS_SHORT } from '../constants/i18n';
+import { todayStr, fmtDate } from '../utils/date';
+import { MonthCalendar, CalendarSizes } from '../components/MonthCalendar';
+import { FadeIn } from '../components/FadeIn';
 
 function nowTimeStr() {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
-import { PROGRAMS } from '../constants/programs';
+import { PROGRAMS, PROGRAM_COLORS } from '../constants/programs';
 import { exportToCalendar } from '../utils/calendar';
 import { isWithinCancellationDeadline } from '../utils/bookingRules';
+
+// Maße des Termine-Kalenders (leicht kompakter als der Buchen-Kalender).
+const CAL_SIZES: CalendarSizes = {
+  navBtn: 36, navBtnRadius: 10, bodyPad: 12, bodyPadBottom: 14,
+  weekRowMargin: 4, weekLabelSize: 11, dayHeight: 48, dayRadius: 10, dayTextSize: 14,
+};
 
 interface Props {
   appointments: Appointment[];
@@ -22,15 +30,11 @@ interface Props {
   activeTokens: CancellationToken[];
   setTab: (t: Tab) => void;
   header?: React.ReactNode;
+  /** Initial-Load läuft noch — Spinner statt „Noch keine Termine". */
+  loading?: boolean;
+  /** Pull-to-Refresh: lädt Termine, Tokens und Slots neu. */
+  onRefresh?: () => Promise<void>;
 }
-
-const PROGRAM_COLORS: Record<string, string> = {
-  individual:           '#4A8FE8',
-  gruppe:               '#3DBFA0',
-  athletik:             '#F5A84A',
-  torhueter_individual: '#E87676',
-  torhueter_gruppe:     '#9B59B6',
-};
 
 function getStyles(C: Colors) {
   return StyleSheet.create({
@@ -51,40 +55,6 @@ function getStyles(C: Colors) {
     tokenText: { fontSize: 13, fontWeight: '600', color: C.text, flex: 1 },
 
     calCard: { marginBottom: 12, overflow: 'hidden' },
-    monthNav: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: 16,
-      paddingHorizontal: 18,
-      borderBottomWidth: 1,
-      borderBottomColor: C.cardBorder,
-    },
-    navBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
-      backgroundColor: C.accentBg,
-      borderWidth: 1,
-      borderColor: C.cardBorder,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    navBtnText: { fontSize: 20, fontWeight: '700', color: C.accent },
-    monthLabel: { fontSize: 17, fontWeight: '700', color: C.text },
-    calBody: { padding: 12, paddingBottom: 14 },
-    weekRow: { flexDirection: 'row', marginBottom: 4 },
-    weekCell: { flex: 1, alignItems: 'center' },
-    weekLabel: { fontSize: 11, fontWeight: '700', color: C.textMid },
-    dayGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-    dayCell: { width: '14.28%', height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
-    dayCellSelected: { backgroundColor: C.accent },
-    dayCellToday: { backgroundColor: C.accentBg },
-    dayText: { fontSize: 14, color: C.text, fontWeight: '400' },
-    dayTextSelected: { color: '#fff', fontWeight: '700' },
-    dayTextToday: { color: C.accent, fontWeight: '700' },
-    dotRow: { flexDirection: 'row', gap: 2, marginTop: 2 },
-    dot: { width: 5, height: 5, borderRadius: 3 },
 
     legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -340,56 +310,51 @@ function ApptCard({ appt, onCancel }: { appt: Appointment; onCancel: (id: string
   );
 }
 
-export function TermineScreen({ appointments, cancelAppointment, activeTokens, setTab, header }: Props) {
+export function TermineScreen({ appointments, cancelAppointment, activeTokens, setTab, header, loading = false, onRefresh }: Props) {
   const { C } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
   const insets = useSafeAreaInsets();
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(16)).current;
   const [calM, setCalM] = useState(new Date().getMonth());
   const [calY, setCalY] = useState(new Date().getFullYear());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 350, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 350, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-    ]).start();
-  }, []);
+  const doRefresh = async () => {
+    if (!onRefresh) return;
+    setRefreshing(true);
+    try { await onRefresh(); } finally { setRefreshing(false); }
+  };
 
   const ts = todayStr();
 
   const prevMonth = () => { const d = new Date(calY, calM - 1); setCalM(d.getMonth()); setCalY(d.getFullYear()); };
   const nextMonth = () => { const d = new Date(calY, calM + 1); setCalM(d.getMonth()); setCalY(d.getFullYear()); };
 
-  const daysInMonth = new Date(calY, calM + 1, 0).getDate();
-  const firstDow = (new Date(calY, calM, 1).getDay() + 6) % 7;
-  const cells: (number | null)[] = [];
-  for (let i = 0; i < firstDow; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-
-  const confirmedAppts = appointments.filter(a => a.status === 'confirmed');
-
-  const listAppts = selectedDate
-    ? appointments.filter(a => a.date === selectedDate)
-    : null;
-
-  const nowTime = nowTimeStr();
-  const upcoming = selectedDate ? [] : [...appointments]
-    .filter(a => a.status === 'confirmed' && (a.date > ts || (a.date === ts && a.time > nowTime)))
-    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
-
-  const past = selectedDate ? [] : [...appointments]
-    .filter(a => a.status === 'cancelled' || a.date < ts || (a.date === ts && a.time <= nowTime))
-    .sort((a, b) => b.date.localeCompare(a.date));
+  // Filter/Sortierung nur bei Datenänderung neu berechnen, nicht bei jedem
+  // Render (Monatswechsel, Storno-Dialog etc.).
+  const { confirmedAppts, listAppts, upcoming, past } = React.useMemo(() => {
+    const confirmed = appointments.filter(a => a.status === 'confirmed');
+    const list = selectedDate ? appointments.filter(a => a.date === selectedDate) : null;
+    const nowTime = nowTimeStr();
+    const up = selectedDate ? [] : [...appointments]
+      .filter(a => a.status === 'confirmed' && (a.date > ts || (a.date === ts && a.time > nowTime)))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+    const pa = selectedDate ? [] : [...appointments]
+      .filter(a => a.status === 'cancelled' || a.date < ts || (a.date === ts && a.time <= nowTime))
+      .sort((a, b) => b.date.localeCompare(a.date));
+    return { confirmedAppts: confirmed, listAppts: list, upcoming: up, past: pa };
+  }, [appointments, selectedDate, ts]);
 
   return (
     <ScrollView
       style={[styles.flex, { backgroundColor: 'transparent' }]}
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 20, paddingBottom: 20 }]}
       showsVerticalScrollIndicator={false}
+      refreshControl={onRefresh && (
+        <RefreshControl refreshing={refreshing} onRefresh={doRefresh} tintColor={C.accent} colors={[C.accent]} />
+      ) || undefined}
     >
-      <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <FadeIn>
         {header}
         <Text style={styles.screenTitle}>Meine Termine</Text>
 
@@ -409,66 +374,21 @@ export function TermineScreen({ appointments, cancelAppointment, activeTokens, s
 
         {/* Kalender */}
         <Card style={styles.calCard}>
-          <View style={styles.monthNav}>
-            <TouchableOpacity onPress={prevMonth} style={styles.navBtn} activeOpacity={0.8}>
-              <Text style={styles.navBtnText}>‹</Text>
-            </TouchableOpacity>
-            <Text style={styles.monthLabel}>{DE_MONTHS[calM]} {calY}</Text>
-            <TouchableOpacity onPress={nextMonth} style={styles.navBtn} activeOpacity={0.8}>
-              <Text style={styles.navBtnText}>›</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.calBody}>
-            <View style={styles.weekRow}>
-              {DE_DAYS_SHORT.map(d => (
-                <View key={d} style={styles.weekCell}>
-                  <Text style={styles.weekLabel}>{d}</Text>
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.dayGrid}>
-              {cells.map((d, i) => {
-                if (!d) return <View key={`e-${i}`} style={styles.dayCell} />;
-                const ds = `${calY}-${String(calM + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                const dayAppts = confirmedAppts.filter(a => a.date === ds);
-                const isSel = selectedDate === ds;
-                const isToday = ds === ts;
-
-                return (
-                  <TouchableOpacity
-                    key={`d-${i}`}
-                    onPress={() => setSelectedDate(isSel ? null : ds)}
-                    activeOpacity={0.75}
-                    style={[
-                      styles.dayCell,
-                      isSel && styles.dayCellSelected,
-                      isToday && !isSel && styles.dayCellToday,
-                    ]}
-                  >
-                    <Text style={[
-                      styles.dayText,
-                      isSel && styles.dayTextSelected,
-                      isToday && !isSel && styles.dayTextToday,
-                    ]}>
-                      {d}
-                    </Text>
-                    {dayAppts.length > 0 && (
-                      <View style={styles.dotRow}>
-                        {dayAppts.slice(0, 3).map((a, idx) => (
-                          <View
-                            key={idx}
-                            style={[styles.dot, { backgroundColor: isSel ? 'rgba(255,255,255,0.9)' : (PROGRAM_COLORS[a.program] ?? C.accentLight) }]}
-                          />
-                        ))}
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
+          <MonthCalendar
+            year={calY}
+            month={calM}
+            onPrevMonth={prevMonth}
+            onNextMonth={nextMonth}
+            todayStr={ts}
+            selectedDate={selectedDate}
+            onSelectDate={ds => setSelectedDate(selectedDate === ds ? null : ds)}
+            getDayDots={(ds, isSel) =>
+              confirmedAppts
+                .filter(a => a.date === ds)
+                .map(a => (isSel ? 'rgba(255,255,255,0.9)' : (PROGRAM_COLORS[a.program] ?? C.accentLight)))
+            }
+            sizes={CAL_SIZES}
+          />
         </Card>
 
         {/* Legende */}
@@ -499,7 +419,9 @@ export function TermineScreen({ appointments, cancelAppointment, activeTokens, s
         ) : (
           <>
             {upcoming.length === 0 && past.length === 0 && (
-              <Text style={styles.emptyText}>Noch keine Termine vorhanden.</Text>
+              loading
+                ? <ActivityIndicator color={C.accent} style={{ marginTop: 24 }} />
+                : <Text style={styles.emptyText}>Noch keine Termine vorhanden.</Text>
             )}
             {upcoming.length > 0 && (
               <>
@@ -515,7 +437,7 @@ export function TermineScreen({ appointments, cancelAppointment, activeTokens, s
             )}
           </>
         )}
-      </Animated.View>
+      </FadeIn>
     </ScrollView>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { TouchableOpacity, Text, ViewStyle, Animated, StyleSheet } from 'react-native';
+import { TouchableOpacity, Text, ViewStyle, Animated, StyleSheet, ActivityIndicator } from 'react-native';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -10,6 +10,12 @@ interface Props {
   onPress: () => void;
   variant?: Variant;
   disabled?: boolean;
+  /** Spinner statt Label; blockiert onPress solange aktiv. */
+  loading?: boolean;
+  /** Optionales Icon links vom Label. */
+  icon?: React.ReactNode;
+  /** Pfeil rechts (nur primary); default true = bisheriges Verhalten. */
+  showArrow?: boolean;
   style?: ViewStyle;
 }
 
@@ -60,12 +66,16 @@ function getStyles(C: Colors) {
   });
 }
 
-export function Btn({ label, onPress, variant = 'primary', disabled = false, style }: Props) {
+export function Btn({
+  label, onPress, variant = 'primary', disabled = false,
+  loading = false, icon, showArrow = true, style,
+}: Props) {
   const { C } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
   const scale = useRef(new Animated.Value(1)).current;
   const isPrim = variant === 'primary';
   const isRed = variant === 'red';
+  const isBlocked = disabled || loading;
 
   const pressIn = () => Animated.timing(scale, { toValue: 0.982, duration: 80, useNativeDriver: true }).start();
   const pressOut = () => Animated.timing(scale, { toValue: 1, duration: 80, useNativeDriver: true }).start();
@@ -76,7 +86,7 @@ export function Btn({ label, onPress, variant = 'primary', disabled = false, sty
         onPress={onPress}
         onPressIn={pressIn}
         onPressOut={pressOut}
-        disabled={disabled}
+        disabled={isBlocked}
         activeOpacity={1}
         style={[
           styles.btn,
@@ -86,10 +96,17 @@ export function Btn({ label, onPress, variant = 'primary', disabled = false, sty
           disabled && { opacity: 0.4 },
         ]}
       >
-        <Text style={[styles.label, (isPrim || isRed) && { color: '#fff' }, (!isPrim && !isRed) && styles.ghostLabel]}>
-          {label}
-        </Text>
-        {isPrim && <Text style={styles.arrow}>→</Text>}
+        {loading ? (
+          <ActivityIndicator color={isPrim || isRed ? '#fff' : C.accent} />
+        ) : (
+          <>
+            {icon}
+            <Text style={[styles.label, (isPrim || isRed) && { color: '#fff' }, (!isPrim && !isRed) && styles.ghostLabel]}>
+              {label}
+            </Text>
+            {isPrim && showArrow && <Text style={styles.arrow}>→</Text>}
+          </>
+        )}
       </TouchableOpacity>
     </Animated.View>
   );

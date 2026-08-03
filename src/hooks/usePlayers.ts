@@ -1,35 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { Player } from '../types';
 import { PlayerService } from '../services/playerService';
+import { appStorage } from '../lib/storage';
 
+// Persistenz des aktiven Kindes: Cookie im Web, SecureStore nativ (lib/storage).
 const STORAGE_KEY = 'pk_active_player';
-
-// Plattform-bewusste Persistenz des aktiven Kindes (analog ThemeContext):
-// Cookie im Web, SecureStore nativ.
-const activePlayerStorage = {
-  get: async (): Promise<string | null> => {
-    if (Platform.OS === 'web') {
-      if (typeof document === 'undefined') return null;
-      const match = document.cookie.match(new RegExp('(?:^|; )' + STORAGE_KEY + '=([^;]*)'));
-      return match ? decodeURIComponent(match[1]) : null;
-    }
-    const SecureStore = await import('expo-secure-store');
-    return SecureStore.getItemAsync(STORAGE_KEY);
-  },
-  set: async (value: string): Promise<void> => {
-    if (Platform.OS === 'web') {
-      if (typeof document === 'undefined') return;
-      const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-      const secure = isHttps ? '; Secure' : '';
-      document.cookie = `${STORAGE_KEY}=${encodeURIComponent(value)}; path=/; max-age=31536000; SameSite=Strict${secure}`;
-    } else {
-      const SecureStore = await import('expo-secure-store');
-      SecureStore.setItemAsync(STORAGE_KEY, value);
-    }
-  },
-};
 
 // Laedt die Spieler (Kinder) des eingeloggten Elternteils und verwaltet das
 // aktive Kind. Bei genau einem Spieler blendet die UI den Umschalter aus.
@@ -40,7 +16,7 @@ export function usePlayers() {
   const persistedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    activePlayerStorage.get().then(v => { persistedRef.current = v; });
+    appStorage.getItem(STORAGE_KEY).then(v => { persistedRef.current = v; });
   }, []);
 
   useEffect(() => {
@@ -98,7 +74,7 @@ export function usePlayers() {
   const setActivePlayer = useCallback((id: string) => {
     setActivePlayerId(id);
     persistedRef.current = id;
-    activePlayerStorage.set(id);
+    appStorage.setItem(STORAGE_KEY, id);
   }, []);
 
   const activePlayer = players.find(p => p.id === activePlayerId) ?? null;

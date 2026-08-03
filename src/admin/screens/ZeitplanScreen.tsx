@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator } from 'react-native';
 import { TrainerSchedule, TrainerSpecialty } from '../../types';
-import { TrainerProfile } from '../hooks/useAdminData';
+import { TrainerProfile, MutationResult } from '../hooks/useAdminData';
 import { SLOTS } from '../../constants/slots';
-import { LOCATIONS, Location } from '../../constants/studio';
+import { LOCATIONS, LOC_COLOR, Location } from '../../constants/studio';
+import { DE_MONTHS } from '../../constants/i18n';
 
 const LOC_SHORT: Record<Location, string> = { 'Rüsselsheim': 'R', 'Kelsterbach': 'K', 'Groß-Gerau': 'GG' };
-const LOC_COLOR: Record<Location, string> = { 'Rüsselsheim': '#4A8FE8', 'Kelsterbach': '#5A8C6A', 'Groß-Gerau': '#F5A84A' };
 
 // Zyklus pro Zelle: Aus → Rüsselsheim → Kelsterbach → Groß-Gerau → Aus.
 // "Aus" bedeutet keine Slot-Zeile; jeder vorhandene Slot hat einen Standort.
@@ -38,13 +38,11 @@ interface Props {
   trainers: TrainerProfile[];
   trainerSchedules: TrainerSchedule[];
   trainerMonthlyCounts: Record<string, Record<string, number>>;
-  onSetSlot: (trainerId: string, day: number, time: string, location: Location | null) => Promise<{ error: unknown }>;
+  onSetSlot: (trainerId: string, day: number, time: string, location: Location | null) => Promise<MutationResult>;
   onCreateTrainer: (params: { full_name: string; email: string; specialty: TrainerSpecialty }) => Promise<{ error: string | null; tempPassword?: string }>;
   onUpdateTrainer: (trainerId: string, params: { full_name: string; trainer_specialty: TrainerSpecialty }) => Promise<{ error: string | null }>;
   onDeleteTrainer: (trainerId: string) => Promise<{ error: string | null; cancelledCount?: number }>;
 }
-
-const MONTH_LABELS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 
 function currentYearMonth(): string {
   const d = new Date();
@@ -53,7 +51,7 @@ function currentYearMonth(): string {
 
 function formatYearMonth(ym: string): string {
   const [y, m] = ym.split('-');
-  return `${MONTH_LABELS[parseInt(m, 10) - 1]} ${y}`;
+  return `${DE_MONTHS[parseInt(m, 10) - 1]} ${y}`;
 }
 
 function shiftYearMonth(ym: string, delta: number): string {
@@ -114,10 +112,9 @@ export function ZeitplanScreen({ trainers, trainerSchedules, trainerMonthlyCount
     const { error } = await onSetSlot(selectedTrainerId, day, time, next);
     setToggling(null);
     if (error) {
-      const msg = (error as { message?: string })?.message ?? String(error);
       // PostgREST hängt teils Tabellen-Präfixe oder SQL-Codes an — wir zeigen
       // die reine Trigger-Botschaft, wenn wir sie isolieren können.
-      setSlotError(msg.replace(/^.*?:\s*/, ''));
+      setSlotError(error.replace(/^.*?:\s*/, ''));
     }
   };
 

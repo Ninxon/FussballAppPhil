@@ -1,16 +1,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { TrainerSchedule, TrainerSpecialty } from '../types';
+import { fmtTime } from '../utils/date';
 
 export type TrainerWithSpecialty = {
   id: string;
   full_name: string;
   trainer_specialty?: TrainerSpecialty | null;
 };
-
-// PostgREST serializes native time columns as "HH:MM:SS" — normalize to "HH:MM".
-const fmtTime = <T extends { time?: string | null }>(a: T): T =>
-  ({ ...a, time: a.time ? a.time.slice(0, 5) : a.time });
 
 export function useTrainerSchedules() {
   const [trainerSchedules, setTrainerSchedules] = useState<TrainerSchedule[]>([]);

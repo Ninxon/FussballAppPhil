@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Appointment, CancellationToken, ProgramCategory, SlotCount, SlotPlayer, Player, Location } from '../types';
 import { PROGRAM_CATEGORY, ProgramId } from '../constants/programs';
 import { checkDailyConflict, checkProgramPermission } from '../utils/bookingRules';
-import { fmtDate } from '../constants/i18n';
+import { fmtDate, fmtTime } from '../utils/date';
 import { AppointmentService } from '../services/appointmentService';
 import { TokenService } from '../services/tokenService';
 import { EmailService } from '../services/emailService';
@@ -11,10 +11,6 @@ import { EmailService } from '../services/emailService';
 function getCategory(program: string): ProgramCategory {
   return PROGRAM_CATEGORY[program as ProgramId] ?? 'individual';
 }
-
-// PostgREST serializes native time columns as "HH:MM:SS" — normalize to "HH:MM".
-const fmtTime = <T extends { time?: string | null }>(a: T): T =>
-  ({ ...a, time: a.time ? a.time.slice(0, 5) : a.time });
 
 // Termine/Tokens beziehen sich auf das aktive Kind (activePlayer). Slot-Zaehler
 // und Spieler-Infos sind global/anonym und unabhaengig vom aktiven Kind.
@@ -58,6 +54,9 @@ export function useAppointments(activePlayer: Player | null) {
       }
     });
 
+    // Bewusst OHNE serverseitigen Filter: die Subscription speist nicht nur
+    // die eigenen Termine, sondern auch die globalen Slot-Zähler/Spielerinfos
+    // (Kapazitätsanzeige) — dafür müssen Buchungen ALLER Kunden ankommen.
     const channel = supabase
       .channel(`appointments-live-${Date.now()}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointments' }, (payload) => {
@@ -197,6 +196,23 @@ export function useAppointments(activePlayer: Player | null) {
     if (playersData.data) setSlotPlayers(playersData.data as SlotPlayer[]);
   }, []);
 
+  // Vollständiger Neu-Fetch (Pull-to-Refresh): Slots + eigene Termine + Tokens.
+  const refetch = useCallback(async () => {
+    const pid = activePlayerIdRef.current;
+    const jobs: Promise<void>[] = [refreshSlotData()];
+    if (pid) {
+      jobs.push((async () => {
+        const [apptData, tokenData] = await Promise.all([
+          AppointmentService.fetchByPlayer(pid),
+          TokenService.fetchActive(pid),
+        ]);
+        setMyAppointments(((apptData.data ?? []) as Appointment[]).map(fmtTime));
+        setActiveTokens((tokenData.data ?? []) as CancellationToken[]);
+      })());
+    }
+    await Promise.all(jobs);
+  }, [refreshSlotData]);
+
   const addAppointment = async (
     date: string, time: string, program: string,
     location: Location | null = null,
@@ -315,5 +331,5 @@ export function useAppointments(activePlayer: Player | null) {
     return { error: null };
   };
 
-  return { slotCounts, slotPlayers, myAppointments, activeTokens, loading, addAppointment, cancelAppointment, refreshSlotData };
+  return { slotCounts, slotPlayers, myAppointments, activeTokens, loading, addAppointment, cancelAppointment, refreshSlotData, refetch };
 }
