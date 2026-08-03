@@ -1,28 +1,14 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { CustomerProfile, AdminAppointment } from '../hooks/useAdminData';
-import { PROGRAMS } from '../../constants/programs';
+import { PROGRAMS, PROGRAM_COLORS } from '../../constants/programs';
+import { todayStr, fmtDateShort } from '../../utils/date';
 import { AdminTab } from '../../types';
-
-const PROGRAM_COLORS: Record<string, string> = {
-  individual: '#4A8FE8', gruppe: '#3DBFA0', athletik: '#F5A84A',
-  torhueter_individual: '#E87676', torhueter_gruppe: '#9B59B6',
-};
-
-function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 function weekEnd() {
   const d = new Date();
   d.setDate(d.getDate() + 7);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function fmtDate(ds: string) {
-  const [y, m, d] = ds.split('-');
-  return `${d}.${m}.${y}`;
 }
 
 interface Props {
@@ -96,7 +82,7 @@ export function DashboardScreen({ customers, allAppointments, loading, onNavigat
                 <Text style={styles.apptName}>{customer?.full_name ?? '—'}</Text>
                 <Text style={styles.apptMeta}>{prog?.name ?? a.program}</Text>
               </View>
-              <Text style={styles.apptDate}>{fmtDate(a.date)} · {a.time} Uhr</Text>
+              <Text style={styles.apptDate}>{fmtDateShort(a.date)} · {a.time} Uhr</Text>
             </View>
           );
         })

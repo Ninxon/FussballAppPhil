@@ -6,8 +6,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import { GlassCard } from '../components/GlassCard';
 import { Btn } from '../components/Btn';
 import { Appointment, Tab, CancellationToken, Player } from '../types';
-import { todayStr, fmtDate } from '../constants/i18n';
-import { PROGRAMS } from '../constants/programs';
+import { todayStr, fmtDate } from '../utils/date';
+import { PROGRAMS, PROGRAM_COLORS } from '../constants/programs';
 
 interface Props {
   appointments: Appointment[];
@@ -27,14 +27,6 @@ function daysUntil(isoDate: string): number {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return Math.round((target.getTime() - today.getTime()) / 86400000);
 }
-
-const PROGRAM_COLORS: Record<string, string> = {
-  individual:           '#4A8FE8',
-  gruppe:               '#3DBFA0',
-  athletik:             '#F5A84A',
-  torhueter_individual: '#E87676',
-  torhueter_gruppe:     '#9B59B6',
-};
 
 function getStyles(C: Colors) {
   return StyleSheet.create({

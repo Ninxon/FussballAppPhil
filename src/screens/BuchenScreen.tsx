@@ -11,14 +11,13 @@ import { Card } from '../components/Card';
 import { GlassCard } from '../components/GlassCard';
 import { Btn } from '../components/Btn';
 import { Appointment, SlotCount, SlotPlayer, CancellationToken, Tab, TrainerSchedule, Player } from '../types';
-import { todayStr, fmtDate, fmtShort, DE_MONTHS, DE_DAYS_SHORT } from '../constants/i18n';
+import { DE_MONTHS, DE_DAYS_SHORT } from '../constants/i18n';
+import { todayStr, fmtDate, fmtShort } from '../utils/date';
 import { PROGRAMS, PROGRAM_CATEGORY, CATEGORY_COLORS, ProgramId } from '../constants/programs';
 import { PROGRAM_IMAGES } from '../constants/programImages';
 import { germanHolidays, canJoinGroupSlot, reconstructGroups, isBlockedByPeriod } from '../utils/bookingRules';
 import { useBlockedPeriods } from '../hooks/useBlockedPeriods';
-import { LOCATIONS, Location } from '../constants/studio';
-
-const LOC_COLOR: Record<Location, string> = { 'Rüsselsheim': '#4A8FE8', 'Kelsterbach': '#5A8C6A', 'Groß-Gerau': '#F5A84A' };
+import { LOCATIONS, LOC_COLOR, Location } from '../constants/studio';
 
 interface Props {
   slotCounts: SlotCount[];

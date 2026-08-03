@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Activi
 import { CustomerProfile, AdminAppointment } from '../hooks/useAdminData';
 import { LEVEL_COLORS, LEVEL_LABELS, PlayerLevel, PlayerType } from '../../types';
 import { LOCATIONS, Location } from '../../constants/studio';
-import { todayStr } from '../../constants/i18n';
+import { todayStr } from '../../utils/date';
+import { webInputReset } from '../../styles/webInput';
 
 interface Props {
   customers: CustomerProfile[];
@@ -487,7 +488,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 12, marginBottom: 20,
     borderWidth: 1, borderColor: 'rgba(21,34,56,0.08)',
   },
-  searchInput: { flex: 1, fontSize: 15, color: '#152238', outlineWidth: 0 } as any,
+  searchInput: { flex: 1, fontSize: 15, color: '#152238', ...webInputReset },
   clearIcon: { fontSize: 14, color: '#7A90AE', paddingHorizontal: 4 },
   list: { flex: 1 },
   listContent: { paddingHorizontal: 32, paddingBottom: 32 },
@@ -544,8 +545,8 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: '#F4F8FF', borderWidth: 1, borderColor: 'rgba(21,34,56,0.08)',
     borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10,
-    fontSize: 14, color: '#152238', outlineWidth: 0,
-  } as any,
+    fontSize: 14, color: '#152238', ...webInputReset,
+  },
   submitBtn: {
     marginTop: 20, backgroundColor: '#152238', borderRadius: 10, paddingVertical: 13, alignItems: 'center',
     shadowColor: '#152238', shadowOffset: { width: 0, height: 6 },

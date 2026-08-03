@@ -4,16 +4,12 @@ import {
 } from 'react-native';
 import { CustomerProfile, AdminAppointment, TrainerProfile } from '../hooks/useAdminData';
 import { PlayerLevel, PlayerType, LEVEL_COLORS, LEVEL_LABELS, BookingPermissions } from '../../types';
-import { PROGRAMS, PROGRAM_CATEGORY, ProgramId } from '../../constants/programs';
+import { PROGRAMS, PROGRAM_CATEGORY, PROGRAM_COLORS, ProgramId } from '../../constants/programs';
 import { SLOTS } from '../../constants/slots';
-import { todayStr, fmtDate } from '../../constants/i18n';
+import { todayStr, fmtDate } from '../../utils/date';
+import { webInputReset } from '../../styles/webInput';
 import { LOCATIONS, Location } from '../../constants/studio';
 import { generateRecurringDates, RecurrenceInterval } from '../../utils/recurrence';
-
-const PROGRAM_COLORS: Record<string, string> = {
-  individual: '#4A8FE8', gruppe: '#3DBFA0', athletik: '#F5A84A',
-  torhueter_individual: '#E87676', torhueter_gruppe: '#9B59B6',
-};
 
 const LEVELS: PlayerLevel[] = ['anfaenger', 'amateur', 'profi', 'experte'];
 
@@ -1001,8 +997,8 @@ const styles = StyleSheet.create({
   editBtns: { flexDirection: 'row', gap: 10, marginTop: 14 },
   editInput: {
     backgroundColor: '#F4F8FF', borderWidth: 1, borderColor: 'rgba(21,34,56,0.08)',
-    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#152238', marginBottom: 4, outlineWidth: 0,
-  } as any,
+    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#152238', marginBottom: 4, ...webInputReset,
+  },
   editProfileBtn: { marginTop: 12, backgroundColor: 'rgba(74,143,232,0.08)', borderRadius: 8, paddingVertical: 9, paddingHorizontal: 16, alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(74,143,232,0.2)' },
   editProfileBtnText: { fontSize: 13, fontWeight: '700', color: '#4A8FE8' },
   cancelEditBtn: { borderRadius: 10, paddingVertical: 12, alignItems: 'center', backgroundColor: 'rgba(21,34,56,0.06)' },
@@ -1050,7 +1046,7 @@ const styles = StyleSheet.create({
   activeLabel: { fontSize: 13, fontWeight: '700', color: '#152238' },
   fieldLabel: { fontSize: 12, fontWeight: '700', color: '#4A6080', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, marginTop: 4 },
   formSection: { backgroundColor: '#F4F8FF', borderRadius: 10, padding: 16, marginBottom: 16 },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(21,34,56,0.08)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#152238', outlineWidth: 0 } as any,
+  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(21,34,56,0.08)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#152238', ...webInputReset },
   saveBtn: {
     backgroundColor: '#152238', borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 16,
     shadowColor: '#152238', shadowOffset: { width: 0, height: 6 },

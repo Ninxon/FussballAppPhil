@@ -1,4 +1,5 @@
-import { todayStr, fmtDate, fmtShort, DE_MONTHS, DE_MONTHS_S, DE_DAYS_FULL } from '../constants/i18n';
+import { DE_MONTHS, DE_MONTHS_S, DE_DAYS_FULL } from '../constants/i18n';
+import { todayStr, fmtDate, fmtShort } from '../utils/date';
 
 describe('todayStr', () => {
   it('returns YYYY-MM-DD format', () => {

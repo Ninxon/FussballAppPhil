@@ -1,29 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Linking } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { PROGRAMS, PROGRAM_CAPACITY, ProgramId } from '../constants/programs';
-
-const PROGRAM_COLORS: Record<string, string> = {
-  individual: '#4A8FE8', gruppe: '#3DBFA0', athletik: '#F5A84A',
-  torhueter_individual: '#E87676', torhueter_gruppe: '#9B59B6',
-};
-
-const LEVEL_LABELS: Record<string, string> = {
-  anfaenger: 'Anfänger', amateur: 'Amateur', profi: 'Profi', experte: 'Experte',
-};
-const LEVEL_COLORS: Record<string, string> = {
-  anfaenger: '#4CAF50', amateur: '#FFC107', profi: '#FF9800', experte: '#F44336',
-};
-
-function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function fmtDate(ds: string) {
-  const [y, m, d] = ds.split('-');
-  return `${d}.${m}.${y}`;
-}
+import { PROGRAMS, PROGRAM_CAPACITY, PROGRAM_COLORS, ProgramId } from '../constants/programs';
+import { LEVEL_LABELS, LEVEL_COLORS, PlayerLevel } from '../types';
+import { todayStr, fmtDateShort } from '../utils/date';
+import { webInputReset } from '../styles/webInput';
 
 // Nav-Icons als View-Formen (statt Emojis) — Stil wie in src/components/BottomNav.tsx
 const NAV_ACTIVE = '#1C2133';
@@ -255,7 +236,7 @@ function SlotCard({ slot }: { slot: TrainerSlot }) {
         <View style={styles.cardBody}>
           <Text style={[styles.cardProgram, { color }]}>{prog?.name ?? slot.program}</Text>
           <Text style={styles.cardDate}>
-            {fmtDate(slot.date)} · {slot.time} Uhr{slot.location ? ` · ${slot.location}` : ''}
+            {fmtDateShort(slot.date)} · {slot.time} Uhr{slot.location ? ` · ${slot.location}` : ''}
           </Text>
         </View>
         {isGroup && (
@@ -268,9 +249,9 @@ function SlotCard({ slot }: { slot: TrainerSlot }) {
       <View style={styles.memberList}>
         {slot.members.map(m => (
           <View key={m.id} style={styles.memberRow}>
-            <View style={[styles.levelDot, { backgroundColor: m.level ? (LEVEL_COLORS[m.level] ?? '#D1D5DB') : '#D1D5DB' }]} />
+            <View style={[styles.levelDot, { backgroundColor: m.level ? (LEVEL_COLORS[m.level as PlayerLevel] ?? '#D1D5DB') : '#D1D5DB' }]} />
             <Text style={styles.memberName}>{m.name}</Text>
-            {m.level && <Text style={styles.memberLevel}>{LEVEL_LABELS[m.level] ?? m.level}</Text>}
+            {m.level && <Text style={styles.memberLevel}>{LEVEL_LABELS[m.level as PlayerLevel] ?? m.level}</Text>}
           </View>
         ))}
       </View>
@@ -497,7 +478,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   fieldLabel: { fontSize: 12, fontWeight: '700', color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 14, marginBottom: 6 },
-  input: { backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#111827', outlineWidth: 0 } as any,
+  input: { backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#111827', ...webInputReset },
   successBox: { backgroundColor: '#F0FDF4', borderRadius: 8, padding: 12, marginBottom: 4 },
   successText: { fontSize: 13, fontWeight: '700', color: '#15803D' },
   errorText: { fontSize: 13, color: '#EF4444', fontWeight: '600', marginTop: 10 },

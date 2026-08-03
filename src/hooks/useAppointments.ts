@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Appointment, CancellationToken, ProgramCategory, SlotCount, SlotPlayer, Player, Location } from '../types';
 import { PROGRAM_CATEGORY, ProgramId } from '../constants/programs';
 import { checkDailyConflict, checkProgramPermission } from '../utils/bookingRules';
-import { fmtDate } from '../constants/i18n';
+import { fmtDate, fmtTime } from '../utils/date';
 import { AppointmentService } from '../services/appointmentService';
 import { TokenService } from '../services/tokenService';
 import { EmailService } from '../services/emailService';
@@ -11,10 +11,6 @@ import { EmailService } from '../services/emailService';
 function getCategory(program: string): ProgramCategory {
   return PROGRAM_CATEGORY[program as ProgramId] ?? 'individual';
 }
-
-// PostgREST serializes native time columns as "HH:MM:SS" — normalize to "HH:MM".
-const fmtTime = <T extends { time?: string | null }>(a: T): T =>
-  ({ ...a, time: a.time ? a.time.slice(0, 5) : a.time });
 
 // Termine/Tokens beziehen sich auf das aktive Kind (activePlayer). Slot-Zaehler
 // und Spieler-Infos sind global/anonym und unabhaengig vom aktiven Kind.

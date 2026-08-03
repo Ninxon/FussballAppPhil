@@ -53,11 +53,6 @@ function calcAge(birthDate: string | null): string {
   return `${age} Jahre`;
 }
 
-function fmtDate(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
 // Übersetzt die (englischen) Supabase-Auth-Fehler in handlungsleitende Meldungen.
 // Wichtigster Fall: abgelaufene/fehlende Session -> "erneut versuchen" hilft NICHT,
 // der Kunde muss sich neu anmelden.

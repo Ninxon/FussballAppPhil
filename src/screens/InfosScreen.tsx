@@ -6,11 +6,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { GlassCard } from '../components/GlassCard';
 import { supabase } from '../lib/supabase';
 import { AppNotification, Player } from '../types';
-
-function fmtDate(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
+import { fmtTimestampShort } from '../utils/date';
 
 interface Props {
   player: Player | null;
@@ -139,7 +135,7 @@ export function InfosScreen({ player }: Props) {
           visibleNotifications.map(n => (
             <GlassCard key={n.id} style={styles.card}>
               <View style={styles.cardTop}>
-                <Text style={styles.cardDate}>{fmtDate(n.created_at)}</Text>
+                <Text style={styles.cardDate}>{fmtTimestampShort(n.created_at)}</Text>
                 {n.location && (
                   <View style={styles.locationBadge}>
                     <Text style={styles.locationText}>📍 {n.location}</Text>

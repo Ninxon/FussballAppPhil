@@ -3,11 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Activi
 import { supabase } from '../../lib/supabase';
 import { AppNotification } from '../../types';
 import { LOCATIONS, Location } from '../../constants/studio';
-
-function fmtDate(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
+import { fmtTimestampShort } from '../../utils/date';
+import { webInputReset } from '../../styles/webInput';
 
 export function NotificationsScreen() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -157,7 +154,7 @@ export function NotificationsScreen() {
         notifications.map(n => (
           <View key={n.id} style={styles.notifCard}>
             <View style={styles.notifHeader}>
-              <Text style={styles.notifDate}>{fmtDate(n.created_at)}</Text>
+              <Text style={styles.notifDate}>{fmtTimestampShort(n.created_at)}</Text>
               {n.location && (
                 <View style={styles.locationBadge}>
                   <Text style={styles.locationText}>{n.location}</Text>
@@ -196,8 +193,8 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 12, fontWeight: '700', color: '#4A6080', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6, marginTop: 10 },
   input: {
     backgroundColor: '#F4F8FF', borderWidth: 1, borderColor: 'rgba(21,34,56,0.08)',
-    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#152238', outlineWidth: 0,
-  } as any,
+    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#152238', ...webInputReset,
+  },
   textArea: { minHeight: 90, textAlignVertical: 'top' },
   errorText: { fontSize: 13, color: '#EF4444', fontWeight: '600', marginTop: 10 },
   saveBtn: {

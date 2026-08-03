@@ -6,13 +6,14 @@ import { useTheme } from '../contexts/ThemeContext';
 import { Card } from '../components/Card';
 import { Btn } from '../components/Btn';
 import { Appointment, CancellationToken, Tab } from '../types';
-import { todayStr, fmtDate, DE_MONTHS, DE_DAYS_SHORT } from '../constants/i18n';
+import { DE_MONTHS, DE_DAYS_SHORT } from '../constants/i18n';
+import { todayStr, fmtDate } from '../utils/date';
 
 function nowTimeStr() {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
-import { PROGRAMS } from '../constants/programs';
+import { PROGRAMS, PROGRAM_COLORS } from '../constants/programs';
 import { exportToCalendar } from '../utils/calendar';
 import { isWithinCancellationDeadline } from '../utils/bookingRules';
 
@@ -23,14 +24,6 @@ interface Props {
   setTab: (t: Tab) => void;
   header?: React.ReactNode;
 }
-
-const PROGRAM_COLORS: Record<string, string> = {
-  individual:           '#4A8FE8',
-  gruppe:               '#3DBFA0',
-  athletik:             '#F5A84A',
-  torhueter_individual: '#E87676',
-  torhueter_gruppe:     '#9B59B6',
-};
 
 function getStyles(C: Colors) {
   return StyleSheet.create({

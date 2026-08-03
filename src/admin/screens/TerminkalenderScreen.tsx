@@ -4,7 +4,10 @@ import {
   ActivityIndicator, TextInput, useWindowDimensions,
 } from 'react-native';
 import { CustomerProfile, AdminAppointment, TrainerProfile } from '../hooks/useAdminData';
-import { PROGRAMS, PROGRAM_CATEGORY, ProgramId } from '../../constants/programs';
+import { PROGRAMS, PROGRAM_CATEGORY, PROGRAM_COLORS, ProgramId } from '../../constants/programs';
+import { DE_DAYS_SHORT, DE_MONTHS } from '../../constants/i18n';
+import { fmtDateShort } from '../../utils/date';
+import { webInputReset } from '../../styles/webInput';
 import { SLOTS } from '../../constants/slots';
 import { isBookableDay } from '../../utils/bookingRules';
 import { useBlockedPeriods } from '../../hooks/useBlockedPeriods';
@@ -34,13 +37,6 @@ const C = {
   pastOpacity:  0.45,
 };
 
-const PROGRAM_COLORS: Record<string, string> = {
-  individual:          '#4A8FE8',
-  gruppe:              '#3DBFA0',
-  athletik:            '#F5A84A',
-  torhueter_individual:'#E87676',
-  torhueter_gruppe:    '#9B59B6',
-};
 const PROGRAM_BG: Record<string, string> = {
   individual:          'rgba(74,143,232,0.10)',
   gruppe:              'rgba(61,191,160,0.10)',
@@ -50,8 +46,7 @@ const PROGRAM_BG: Record<string, string> = {
 };
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const DE_DAYS       = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-const DE_MONTHS     = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const DE_DAYS       = DE_DAYS_SHORT;
 const ALL_SLOTS     = SLOTS;
 const TIME_COL_W    = 68;
 const DAY_COL_MIN   = 118;
@@ -59,7 +54,7 @@ const DAY_COL_MIN   = 118;
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function pad2(n: number) { return String(n).padStart(2, '0'); }
 function dateStr(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
-function fmtDate(ds: string) { const [y,m,d] = ds.split('-'); return `${d}.${m}.${y}`; }
+const fmtDate = fmtDateShort;
 function fmtDayLong(ds: string) {
   const d = new Date(ds + 'T12:00:00');
   const dow = (d.getDay() + 6) % 7;
@@ -922,8 +917,8 @@ const s = StyleSheet.create({
   cancelReasonInput: {
     backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderRadius: 8,
     paddingHorizontal: 11, paddingVertical: 8, fontSize: 13, color: C.text,
-    marginTop: 10, minHeight: 52, textAlignVertical: 'top', outlineWidth: 0,
-  } as any,
+    marginTop: 10, minHeight: 52, textAlignVertical: 'top', ...webInputReset,
+  },
 
   // ── Booking panel ──────────────────────────────────────────────────────────
   bookPanel: {
@@ -956,8 +951,8 @@ const s = StyleSheet.create({
   input: {
     backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderRadius: 9,
     paddingHorizontal: 13, paddingVertical: 10, fontSize: 14, color: C.text,
-    outlineWidth: 0,
-  } as any,
+    ...webInputReset,
+  },
   suggestion: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: C.bg, borderRadius: 8,

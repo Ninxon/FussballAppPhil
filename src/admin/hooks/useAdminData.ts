@@ -7,6 +7,7 @@ import { TokenService } from '../../services/tokenService';
 import { TrainerScheduleService } from '../../services/trainerScheduleService';
 import { CustomerService, CreateCustomerParams, extractFunctionError } from '../services/customerService';
 import { PROGRAM_CATEGORY, ProgramId } from '../../constants/programs';
+import { fmtTime } from '../../utils/date';
 import { canJoinGroupSlot, checkProgramPermission } from '../../utils/bookingRules';
 import { supabase } from '../../lib/supabase';
 
@@ -58,10 +59,6 @@ export type TrainerProfile = {
   full_name: string;
   trainer_specialty?: TrainerSpecialty | null;
 };
-
-// PostgREST serializes native time columns as "HH:MM:SS" — normalize to "HH:MM".
-const fmtTime = <T extends { time?: string | null }>(a: T): T =>
-  ({ ...a, time: a.time ? a.time.slice(0, 5) : a.time });
 
 export function useAdminData() {
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);

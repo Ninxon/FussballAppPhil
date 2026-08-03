@@ -8,3 +8,9 @@ export const STUDIO = {
 
 export const LOCATIONS = ['Rüsselsheim', 'Kelsterbach', 'Groß-Gerau'] as const;
 export type Location = typeof LOCATIONS[number];
+
+export const LOC_COLOR: Record<Location, string> = {
+  'Rüsselsheim': '#4A8FE8',
+  'Kelsterbach': '#5A8C6A',
+  'Groß-Gerau': '#F5A84A',
+};
