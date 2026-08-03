@@ -54,6 +54,9 @@ export function useAppointments(activePlayer: Player | null) {
       }
     });
 
+    // Bewusst OHNE serverseitigen Filter: die Subscription speist nicht nur
+    // die eigenen Termine, sondern auch die globalen Slot-Zähler/Spielerinfos
+    // (Kapazitätsanzeige) — dafür müssen Buchungen ALLER Kunden ankommen.
     const channel = supabase
       .channel(`appointments-live-${Date.now()}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointments' }, (payload) => {

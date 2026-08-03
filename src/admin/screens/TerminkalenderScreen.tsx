@@ -83,6 +83,29 @@ interface Props {
   onAddAppointment:    (userId: string, date: string, time: string, program: string, trainerId?: string | null) => Promise<{ error: any }>;
 }
 
+// Storno-Grund mit LOKALEM State: Tippen rendert nur dieses Panel neu, nicht
+// das komplette Wochen-/Tagesraster. Der aktuelle Text geht per Render-Prop
+// an die Stornieren-Buttons; beim Schließen (Unmount) leert er sich von selbst.
+function CancelReasonSection({ placeholder, children }: {
+  placeholder: string;
+  children: (reason: string) => React.ReactNode;
+}) {
+  const [reason, setReason] = useState('');
+  return (
+    <>
+      <TextInput
+        style={s.cancelReasonInput}
+        value={reason}
+        onChangeText={setReason}
+        placeholder={placeholder}
+        placeholderTextColor={C.textFaint}
+        multiline
+      />
+      {children(reason)}
+    </>
+  );
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 export function TerminkalenderScreen({
   customers, allAppointments, trainers, loading, initialDay,
@@ -98,7 +121,6 @@ export function TerminkalenderScreen({
   const [selectedApptId,  setSelectedApptId]  = useState<string | null>(null);
   const [cancelLoading,   setCancelLoading]   = useState(false);
   const [cancelError,     setCancelError]     = useState<string | null>(null);
-  const [cancelReason,    setCancelReason]    = useState('');
   const [expandedGroupKey,setExpandedGroupKey]= useState<string | null>(null);
 
   const [bookingDay,       setBookingDay]       = useState<string | null>(null);
@@ -112,6 +134,29 @@ export function TerminkalenderScreen({
   const [bookingSuccess,   setBookingSuccess]   = useState(false);
 
   // ── Derived ──────────────────────────────────────────────────────────────
+  // Termin-Index statt ~100 allAppointments.filter()-Scans pro Render
+  // (7 Slots × 7 Tage im Wochenraster, plus Tages-Header).
+  const apptIndex = React.useMemo(() => {
+    const confirmedByDateTime = new Map<string, AdminAppointment[]>();
+    const confirmedCountByDate = new Map<string, number>();
+    const shortCancelsByDate = new Map<string, AdminAppointment[]>();
+    const shortCancelsByDateTime = new Map<string, AdminAppointment[]>();
+    const push = (map: Map<string, AdminAppointment[]>, key: string, a: AdminAppointment) => {
+      const arr = map.get(key);
+      if (arr) arr.push(a); else map.set(key, [a]);
+    };
+    for (const a of allAppointments) {
+      if (a.status === 'confirmed') {
+        push(confirmedByDateTime, `${a.date}|${a.time}`, a);
+        confirmedCountByDate.set(a.date, (confirmedCountByDate.get(a.date) ?? 0) + 1);
+      } else if (a.status === 'cancelled' && a.short_notice_cancel) {
+        push(shortCancelsByDate, a.date, a);
+        push(shortCancelsByDateTime, `${a.date}|${a.time}`, a);
+      }
+    }
+    return { confirmedByDateTime, confirmedCountByDate, shortCancelsByDate, shortCancelsByDateTime };
+  }, [allAppointments]);
+
   const weekStart = getWeekStart(weekRef);
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart);
@@ -140,7 +185,7 @@ export function TerminkalenderScreen({
     const { error } = await onCancelAppointment(id, reason);
     setCancelLoading(false);
     if (error) setCancelError(error.message ?? 'Fehler beim Stornieren.');
-    else { setSelectedApptId(null); setExpandedGroupKey(null); setCancelReason(''); }
+    else { setSelectedApptId(null); setExpandedGroupKey(null); }
   };
 
   const openBookingDay = (ds: string, presetTime?: string) => {
@@ -368,13 +413,12 @@ export function TerminkalenderScreen({
   // TAGESANSICHT
   // ════════════════════════════════════════════════════════════════════════════
   if (viewMode === 'day') {
-    const dayAppts = allAppointments
-      .filter(a => a.date === dayDate && a.status === 'confirmed')
+    const dayAppts = [...apptIndex.confirmedByDateTime.entries()]
+      .filter(([key]) => key.startsWith(`${dayDate}|`))
+      .flatMap(([, appts]) => appts)
       .sort((a, b) => a.time.localeCompare(b.time));
 
-    const dayCancels = allAppointments.filter(
-      a => a.date === dayDate && a.status === 'cancelled' && a.short_notice_cancel,
-    );
+    const dayCancels = apptIndex.shortCancelsByDate.get(dayDate) ?? [];
 
     const isPast = dayDate < todayStr;
     const canBook = !isPast && isBookableDay(dayDate, blockedPeriods);
@@ -506,25 +550,23 @@ export function TerminkalenderScreen({
                     <Text style={s.detailMeta}>
                       {selAppt.time} Uhr{selTrainer ? ` · ${selTrainer.full_name}` : ''}
                     </Text>
-                    <TextInput
-                      style={s.cancelReasonInput}
-                      value={cancelReason}
-                      onChangeText={setCancelReason}
-                      placeholder="Grund (optional) – wird dem Kunden per E-Mail mitgeteilt"
-                      placeholderTextColor={C.textFaint}
-                      multiline
-                    />
-                    {cancelError && <Text style={s.errorText}>{cancelError}</Text>}
-                    <TouchableOpacity
-                      style={[s.stornBtn, cancelLoading && { opacity: 0.6 }]}
-                      onPress={() => handleCancelAppt(selAppt.id, cancelReason)}
-                      activeOpacity={0.7}
-                      disabled={cancelLoading}
-                    >
-                      <Text style={s.stornBtnText}>{cancelLoading ? 'Stornieren…' : 'Termin stornieren'}</Text>
-                    </TouchableOpacity>
+                    <CancelReasonSection placeholder="Grund (optional) – wird dem Kunden per E-Mail mitgeteilt">
+                      {reason => (
+                        <>
+                          {cancelError && <Text style={s.errorText}>{cancelError}</Text>}
+                          <TouchableOpacity
+                            style={[s.stornBtn, cancelLoading && { opacity: 0.6 }]}
+                            onPress={() => handleCancelAppt(selAppt.id, reason)}
+                            activeOpacity={0.7}
+                            disabled={cancelLoading}
+                          >
+                            <Text style={s.stornBtnText}>{cancelLoading ? 'Stornieren…' : 'Termin stornieren'}</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </CancelReasonSection>
                   </View>
-                  <TouchableOpacity onPress={() => { setSelectedApptId(null); setCancelReason(''); }} style={s.detailClose}>
+                  <TouchableOpacity onPress={() => setSelectedApptId(null)} style={s.detailClose}>
                     <Text style={s.detailCloseText}>✕</Text>
                   </TouchableOpacity>
                 </View>
@@ -550,10 +592,8 @@ export function TerminkalenderScreen({
     }
     const parts = expandedGroupKey.split('|');
     const [expDate, expTime, expProg, expTrainerId] = parts;
-    const appts = allAppointments.filter(a =>
-      a.date === expDate && a.time === expTime &&
-      a.program === expProg && (a.trainer_id ?? '') === expTrainerId &&
-      a.status === 'confirmed'
+    const appts = (apptIndex.confirmedByDateTime.get(`${expDate}|${expTime}`) ?? []).filter(a =>
+      a.program === expProg && (a.trainer_id ?? '') === expTrainerId
     );
     return appts.length ? appts : null;
   })() : null;
@@ -577,10 +617,8 @@ export function TerminkalenderScreen({
                   const isPast   = ds < todayStr;
                   const isWeekend= i >= 5;
                   const canBook  = !isPast && isBookableDay(ds, blockedPeriods);
-                  const count    = allAppointments.filter(a => a.date === ds && a.status === 'confirmed').length;
-                  const cancelCount = allAppointments.filter(
-                    a => a.date === ds && a.status === 'cancelled' && a.short_notice_cancel,
-                  ).length;
+                  const count    = apptIndex.confirmedCountByDate.get(ds) ?? 0;
+                  const cancelCount = (apptIndex.shortCancelsByDate.get(ds) ?? []).length;
 
                   return (
                     <TouchableOpacity
@@ -637,12 +675,8 @@ export function TerminkalenderScreen({
                     const isToday  = ds === todayStr;
                     const isPast   = ds < todayStr;
                     const isWeekend= i >= 5;
-                    const slotAppts= allAppointments.filter(
-                      a => a.date === ds && a.time === slot && a.status === 'confirmed'
-                    );
-                    const slotCancels = allAppointments.filter(
-                      a => a.date === ds && a.time === slot && a.status === 'cancelled' && a.short_notice_cancel
-                    );
+                    const slotAppts = apptIndex.confirmedByDateTime.get(`${ds}|${slot}`) ?? [];
+                    const slotCancels = apptIndex.shortCancelsByDateTime.get(`${ds}|${slot}`) ?? [];
 
                     // Group by program+trainer for groups; individual appointments each get their own block
                     const grouped = new Map<string, typeof slotAppts>();
@@ -750,61 +784,53 @@ export function TerminkalenderScreen({
                 </Text>
 
                 {isGrp ? (
-                  <>
-                    <TextInput
-                      style={s.cancelReasonInput}
-                      value={cancelReason}
-                      onChangeText={setCancelReason}
-                      placeholder="Grund (optional) – wird dem stornierten Kunden per E-Mail mitgeteilt"
-                      placeholderTextColor={C.textFaint}
-                      multiline
-                    />
-                    <View style={s.participantList}>
-                      {expandedDetail.map(a => {
-                        const cust   = customers.find(c => c.id === a.player_id);
-                        const isThis = selectedApptId === a.id;
-                        return (
-                          <View key={a.id} style={s.participantRow}>
-                            <View style={[s.participantDot, { backgroundColor: color }]} />
-                            <Text style={s.participantName} numberOfLines={1}>{cust?.full_name ?? '—'}</Text>
-                            {cancelError && isThis && <Text style={s.errorText}>{cancelError}</Text>}
-                            <TouchableOpacity
-                              style={[s.miniStornBtn, cancelLoading && isThis && { opacity: 0.5 }]}
-                              onPress={() => { setSelectedApptId(a.id); handleCancelAppt(a.id, cancelReason); }}
-                              activeOpacity={0.7}
-                              disabled={cancelLoading && isThis}
-                            >
-                              <Text style={s.miniStornBtnText}>{cancelLoading && isThis ? '…' : 'Stornieren'}</Text>
-                            </TouchableOpacity>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </>
+                  <CancelReasonSection placeholder="Grund (optional) – wird dem stornierten Kunden per E-Mail mitgeteilt">
+                    {reason => (
+                      <View style={s.participantList}>
+                        {expandedDetail.map(a => {
+                          const cust   = customers.find(c => c.id === a.player_id);
+                          const isThis = selectedApptId === a.id;
+                          return (
+                            <View key={a.id} style={s.participantRow}>
+                              <View style={[s.participantDot, { backgroundColor: color }]} />
+                              <Text style={s.participantName} numberOfLines={1}>{cust?.full_name ?? '—'}</Text>
+                              {cancelError && isThis && <Text style={s.errorText}>{cancelError}</Text>}
+                              <TouchableOpacity
+                                style={[s.miniStornBtn, cancelLoading && isThis && { opacity: 0.5 }]}
+                                onPress={() => { setSelectedApptId(a.id); handleCancelAppt(a.id, reason); }}
+                                activeOpacity={0.7}
+                                disabled={cancelLoading && isThis}
+                              >
+                                <Text style={s.miniStornBtnText}>{cancelLoading && isThis ? '…' : 'Stornieren'}</Text>
+                              </TouchableOpacity>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </CancelReasonSection>
                 ) : (
                   <View>
                     <Text style={s.detailName}>{customers.find(c => c.id === first.player_id)?.full_name ?? '—'}</Text>
-                    <TextInput
-                      style={s.cancelReasonInput}
-                      value={cancelReason}
-                      onChangeText={setCancelReason}
-                      placeholder="Grund (optional) – wird dem Kunden per E-Mail mitgeteilt"
-                      placeholderTextColor={C.textFaint}
-                      multiline
-                    />
-                    {cancelError && <Text style={s.errorText}>{cancelError}</Text>}
-                    <TouchableOpacity
-                      style={[s.stornBtn, cancelLoading && { opacity: 0.6 }]}
-                      onPress={() => handleCancelAppt(first.id, cancelReason)}
-                      activeOpacity={0.7}
-                      disabled={cancelLoading}
-                    >
-                      <Text style={s.stornBtnText}>{cancelLoading ? 'Stornieren…' : 'Termin stornieren'}</Text>
-                    </TouchableOpacity>
+                    <CancelReasonSection placeholder="Grund (optional) – wird dem Kunden per E-Mail mitgeteilt">
+                      {reason => (
+                        <>
+                          {cancelError && <Text style={s.errorText}>{cancelError}</Text>}
+                          <TouchableOpacity
+                            style={[s.stornBtn, cancelLoading && { opacity: 0.6 }]}
+                            onPress={() => handleCancelAppt(first.id, reason)}
+                            activeOpacity={0.7}
+                            disabled={cancelLoading}
+                          >
+                            <Text style={s.stornBtnText}>{cancelLoading ? 'Stornieren…' : 'Termin stornieren'}</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </CancelReasonSection>
                   </View>
                 )}
               </View>
-              <TouchableOpacity onPress={() => { setExpandedGroupKey(null); setCancelReason(''); }} style={s.detailClose}>
+              <TouchableOpacity onPress={() => setExpandedGroupKey(null)} style={s.detailClose}>
                 <Text style={s.detailCloseText}>✕</Text>
               </TouchableOpacity>
             </View>

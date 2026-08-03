@@ -151,6 +151,16 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
     );
   }, [customers, query, filterType, filterLocation, filterActive, filterAppt, allAppointments]);
 
+  // Bestätigte Termine je Spieler einmal zählen statt allAppointments pro
+  // Kundenzeile (und pro Suchfeld-Tastendruck) komplett zu filtern.
+  const confirmedCountByPlayer = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const a of allAppointments) {
+      if (a.status === 'confirmed') map.set(a.player_id, (map.get(a.player_id) ?? 0) + 1);
+    }
+    return map;
+  }, [allAppointments]);
+
   if (loading) return <ActivityIndicator style={{ flex: 1 }} color="#4A8FE8" />;
 
   return (
@@ -395,7 +405,7 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
           <Text style={styles.empty}>Keine Kunden gefunden.</Text>
         )}
         {filtered.map(c => {
-          const apptCount = allAppointments.filter(a => a.player_id === c.id && a.status === 'confirmed').length;
+          const apptCount = confirmedCountByPlayer.get(c.id) ?? 0;
           const levelKey = c.level as PlayerLevel | null;
           const isTorwart = c.player_type === 'torwart';
           return (

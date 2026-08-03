@@ -330,20 +330,20 @@ export function TermineScreen({ appointments, cancelAppointment, activeTokens, s
   const prevMonth = () => { const d = new Date(calY, calM - 1); setCalM(d.getMonth()); setCalY(d.getFullYear()); };
   const nextMonth = () => { const d = new Date(calY, calM + 1); setCalM(d.getMonth()); setCalY(d.getFullYear()); };
 
-  const confirmedAppts = appointments.filter(a => a.status === 'confirmed');
-
-  const listAppts = selectedDate
-    ? appointments.filter(a => a.date === selectedDate)
-    : null;
-
-  const nowTime = nowTimeStr();
-  const upcoming = selectedDate ? [] : [...appointments]
-    .filter(a => a.status === 'confirmed' && (a.date > ts || (a.date === ts && a.time > nowTime)))
-    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
-
-  const past = selectedDate ? [] : [...appointments]
-    .filter(a => a.status === 'cancelled' || a.date < ts || (a.date === ts && a.time <= nowTime))
-    .sort((a, b) => b.date.localeCompare(a.date));
+  // Filter/Sortierung nur bei Datenänderung neu berechnen, nicht bei jedem
+  // Render (Monatswechsel, Storno-Dialog etc.).
+  const { confirmedAppts, listAppts, upcoming, past } = React.useMemo(() => {
+    const confirmed = appointments.filter(a => a.status === 'confirmed');
+    const list = selectedDate ? appointments.filter(a => a.date === selectedDate) : null;
+    const nowTime = nowTimeStr();
+    const up = selectedDate ? [] : [...appointments]
+      .filter(a => a.status === 'confirmed' && (a.date > ts || (a.date === ts && a.time > nowTime)))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+    const pa = selectedDate ? [] : [...appointments]
+      .filter(a => a.status === 'cancelled' || a.date < ts || (a.date === ts && a.time <= nowTime))
+      .sort((a, b) => b.date.localeCompare(a.date));
+    return { confirmedAppts: confirmed, listAppts: list, upcoming: up, past: pa };
+  }, [appointments, selectedDate, ts]);
 
   return (
     <ScrollView

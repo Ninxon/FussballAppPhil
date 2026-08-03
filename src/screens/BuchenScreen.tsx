@@ -213,7 +213,17 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
   // agree. For groups the free count is the free spots in the *group the player
   // would actually join* (via reconstructGroups) — not the raw slot-wide count,
   // which mixes other trainers' parallel groups at the same time.
+  // Ergebnis pro (Uhrzeit, Standort) gecacht: der Zeit-Schritt fragt jeden Slot
+  // zweimal ab (Filter + Anzeige), und reconstructGroups soll pro Slot und
+  // Datenstand nur einmal laufen. Der Cache leert sich bei jeder Datenänderung.
+  const availabilityCache = React.useMemo(
+    () => new Map<string, { totalCapacity: number; booked: number; isGroup: boolean; freeInGroup: number; groupUnavailable: boolean }>(),
+    [slotInfo, slotCounts, slotPlayers, selDate, selProgram, player],
+  );
   const slotAvailability = (time: string, location: Location | null) => {
+    const cacheKey = `${time}|${location ?? ''}`;
+    const cached = availabilityCache.get(cacheKey);
+    if (cached) return cached;
     const totalCapacity = slotInfo.getSlotCapacity(time, location);
     const booked = slotCounts.find(s =>
       s.date === selDate && s.time === time && s.program === selProgram &&
@@ -252,7 +262,9 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
       freeInGroup = rem === 0 ? GROUP_SIZE : GROUP_SIZE - rem;
     }
 
-    return { totalCapacity, booked, isGroup, freeInGroup, groupUnavailable };
+    const result = { totalCapacity, booked, isGroup, freeInGroup, groupUnavailable };
+    availabilityCache.set(cacheKey, result);
+    return result;
   };
 
   const allowedPrograms = player
