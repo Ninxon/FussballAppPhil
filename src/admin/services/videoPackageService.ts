@@ -229,6 +229,19 @@ export async function setPackageTrainers(
   return { error: null };
 }
 
+/**
+ * Entfernt ALLE Zuweisungen aller Pakete inkl. der Uhrzeiten und liefert die
+ * Anzahl. Pakete, Videos und Dateien bleiben unberührt.
+ *
+ * Als RPC und nicht als `.delete()`, weil RLS lautlos filtert: ein Nicht-Admin
+ * bekäme sonst „erfolgreich, 0 Zeilen" statt einer Fehlermeldung.
+ */
+export async function resetAllAssignments(): Promise<Result<number>> {
+  const { data, error } = await supabase.rpc('reset_all_package_assignments');
+  if (error) return fail(msg(error, 'Die Verteilung konnte nicht zurückgesetzt werden.'));
+  return succeed(Number(data ?? 0));
+}
+
 // ── Videos (Bibliothek) ────────────────────────────────────────────────────
 
 /**

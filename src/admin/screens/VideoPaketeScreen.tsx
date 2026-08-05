@@ -5,6 +5,7 @@ import { useVideoPackages } from '../hooks/useVideoPackages';
 import { PackageList } from './videoPakete/PackageList';
 import { PackageDetail } from './videoPakete/PackageDetail';
 import { StorageMeter } from './videoPakete/StorageMeter';
+import { ResetAssignmentsPanel } from './videoPakete/ResetAssignmentsPanel';
 import { C } from './videoPakete/theme';
 import { styles } from './videoPakete/styles';
 
@@ -79,6 +80,12 @@ export function VideoPaketeScreen({ trainers }: Props) {
             onAssign={assignments => vp.setPackageTrainers(selected.id, assignments)}
           />
         )}
+
+        <ResetAssignmentsPanel
+          totalAssignments={vp.packages.reduce((n, p) => n + p.assignments.length, 0)}
+          packagesWithAssignments={vp.packages.filter(p => p.assignments.length > 0).length}
+          onReset={vp.resetAllAssignments}
+        />
       </ScrollView>
     </View>
   );

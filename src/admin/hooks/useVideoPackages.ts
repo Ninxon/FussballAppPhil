@@ -136,6 +136,15 @@ export function useVideoPackages() {
     return { error: null };
   };
 
+  const resetAllAssignments = async (): Promise<MutationResult & { removed?: number }> => {
+    const res = await svc.resetAllAssignments();
+    if (!res.ok) return { error: res.error };
+    // Voller Reload statt lokalem Leeren: die Aktion trifft jedes Paket, ein
+    // selbstgebauter lokaler Zustand waere hier nur eine Fehlerquelle.
+    await load();
+    return { error: null, removed: res.data };
+  };
+
   // ── Bibliothek ───────────────────────────────────────────────────────────
 
   const uploadVideo = async (params: {
@@ -186,7 +195,7 @@ export function useVideoPackages() {
     packages, library, usage, packageCounts, loading, loadError,
     createPackage, updatePackage, deletePackage, duplicatePackage,
     addVideoToPackage, removeVideoFromPackage, moveVideo,
-    setPackageTrainers,
+    setPackageTrainers, resetAllAssignments,
     uploadVideo, createLinkVideo, deleteVideo, cleanupOrphans,
     reload: load,
   };
