@@ -96,9 +96,9 @@ export function PackageList({ packages, selectedId, onSelect, onCreate, onDuplic
             <Text style={styles.pkgItemMeta}>
               {pkg.videos.length} {pkg.videos.length === 1 ? 'Video' : 'Videos'}
               {' · '}
-              {pkg.trainerIds.length === 0
+              {pkg.assignments.length === 0
                 ? 'nicht verteilt'
-                : `an ${pkg.trainerIds.length} ${pkg.trainerIds.length === 1 ? 'Trainer' : 'Trainer'} verteilt`}
+                : `an ${pkg.assignments.length} ${pkg.assignments.length === 1 ? 'Trainer' : 'Trainer'} verteilt`}
             </Text>
             {active && (
               <View style={styles.pkgItemActions}>

@@ -76,7 +76,7 @@ export function VideoPaketeScreen({ trainers }: Props) {
             onRemoveVideo={videoId => vp.removeVideoFromPackage(selected.id, videoId)}
             onDeleteVideo={video => vp.deleteVideo(video)}
             onMoveVideo={(videoId, dir) => vp.moveVideo(selected.id, videoId, dir)}
-            onAssign={trainerIds => vp.setPackageTrainers(selected.id, trainerIds)}
+            onAssign={assignments => vp.setPackageTrainers(selected.id, assignments)}
           />
         )}
       </ScrollView>
