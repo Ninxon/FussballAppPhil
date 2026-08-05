@@ -11,7 +11,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#4a6655"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "de.pkfussballschule.app"
@@ -26,6 +28,9 @@
     "web": {
       "bundler": "metro",
       "favicon": "./web/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
   }
 }
