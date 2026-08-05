@@ -91,7 +91,7 @@ $$;
 ALTER FUNCTION "public"."assign_player_number"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."book_with_token"("p_player_id" "uuid", "p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text" DEFAULT NULL) RETURNS json
+CREATE OR REPLACE FUNCTION "public"."book_with_token"("p_player_id" "uuid", "p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text" DEFAULT NULL::"text") RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -117,6 +117,8 @@ BEGIN
     RETURN json_build_object('error', 'Ungültiger Standort.');
   END IF;
 
+  -- Nur bekannte Programme zulassen (sonst faellt die Kategorie-CASE unten
+  -- still auf 'gruppe' zurueck und der Berechtigungs-Check liefe ins Leere).
   IF p_program NOT IN ('individual','gruppe','athletik','torhueter_individual','torhueter_gruppe') THEN
     RETURN json_build_object('error', 'Ungültiges Programm.');
   END IF;
@@ -224,6 +226,7 @@ ALTER FUNCTION "public"."book_with_token"("p_player_id" "uuid", "p_token_id" "uu
 COMMENT ON FUNCTION "public"."book_with_token"("p_player_id" "uuid", "p_token_id" "uuid", "p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text") IS '@omit';
 
 
+
 CREATE OR REPLACE FUNCTION "public"."cancel_and_issue_token"("p_appointment_id" "uuid", "p_skip_token" boolean DEFAULT false) RETURNS json
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -253,16 +256,11 @@ BEGIN
     RETURN json_build_object('error', 'Termin ist bereits storniert.');
   END IF;
 
-  -- Kunde darf einen Nachholtermin maximal zweimal stornieren (count 0 und 1).
   IF v_appt.is_makeup AND NOT v_is_admin AND v_appt.makeup_count >= 2 THEN
     RETURN json_build_object('error',
       'Dieser Nachholtermin kann nicht mehr storniert werden. Bitte wende dich an deinen Trainer.');
   END IF;
 
-  -- Max. EIN offener Gutschein: jede Kunden-Stornierung (auch die eines
-  -- Nachholtermins) ist gesperrt, solange ein unbenutzter Gutschein existiert.
-  -- Ein bereits gebuchter (zukuenftiger) Nachholtermin blockt NICHT.
-  -- Admin-Stornos sind ausgenommen.
   IF NOT v_is_admin THEN
     SELECT EXISTS (
       SELECT 1 FROM public.cancellation_tokens
@@ -307,8 +305,6 @@ BEGIN
     (player_id, category, expires_at, source_appointment_id, makeup_count)
   VALUES (
     v_appt.player_id, v_category,
-    -- Gültigkeit ab dem TERMIN-Datum (nicht ab dem Storno-Zeitpunkt): ein Monat
-    -- ab dem stornierten Termin, gültig bis zum Ende dieses Tages (Europe/Berlin).
     ((v_appt.date + INTERVAL '1 month' + INTERVAL '1 day') AT TIME ZONE 'Europe/Berlin'),
     p_appointment_id,
     CASE WHEN v_appt.is_makeup THEN v_appt.makeup_count + 1 ELSE 0 END
@@ -334,28 +330,13 @@ CREATE OR REPLACE FUNCTION "public"."check_daily_booking_limit"() RETURNS "trigg
     LANGUAGE "plpgsql"
     SET "search_path" TO ''
     AS $$
-DECLARE
-  existing_count INTEGER;
+DECLARE existing_count INTEGER;
 BEGIN
-  IF NEW.status != 'confirmed' THEN
-    RETURN NEW;
-  END IF;
-
-  PERFORM pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtextextended(NEW.player_id::text || '|' || NEW.date::text, 0)
-  );
-
-  SELECT COUNT(*) INTO existing_count
-    FROM public.appointments
-   WHERE player_id = NEW.player_id
-     AND date      = NEW.date
-     AND status    = 'confirmed'
-     AND id       != NEW.id;
-
-  IF existing_count >= 2 THEN
-    RAISE EXCEPTION 'Bereits zwei Termine an diesem Tag gebucht.';
-  END IF;
-
+  IF NEW.status != 'confirmed' THEN RETURN NEW; END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(NEW.player_id::text || '|' || NEW.date::text, 0));
+  SELECT COUNT(*) INTO existing_count FROM public.appointments
+    WHERE player_id = NEW.player_id AND date = NEW.date AND status = 'confirmed' AND id != NEW.id;
+  IF existing_count >= 2 THEN RAISE EXCEPTION 'Bereits zwei Termine an diesem Tag gebucht.'; END IF;
   RETURN NEW;
 END;
 $$;
@@ -590,37 +571,83 @@ $$;
 ALTER FUNCTION "public"."get_trainer_monthly_counts"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."get_video_storage_usage"() RETURNS json
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_files        bigint;
+  v_bytes        bigint;
+  v_orphans      bigint;
+  v_orphan_bytes bigint;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Nur Admins duerfen die Speicherbelegung abfragen.';
+  END IF;
+
+  SELECT count(*), coalesce(sum((o.metadata->>'size')::bigint), 0)
+    INTO v_files, v_bytes
+    FROM storage.objects o
+   WHERE o.bucket_id = 'trainer-videos';
+
+  -- Verwaist = Datei im Bucket ohne zugehoerige videos-Zeile. Entsteht durch
+  -- abgebrochene Uploads und durch delete-trainer (loescht nur DB-Zeilen).
+  SELECT count(*), coalesce(sum((o.metadata->>'size')::bigint), 0)
+    INTO v_orphans, v_orphan_bytes
+    FROM storage.objects o
+   WHERE o.bucket_id = 'trainer-videos'
+     AND NOT EXISTS (
+       SELECT 1 FROM public.videos v WHERE v.storage_path = o.name
+     );
+
+  RETURN json_build_object(
+    'file_count',   v_files,
+    'total_bytes',  v_bytes,
+    'orphan_count', v_orphans,
+    'orphan_bytes', v_orphan_bytes
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_video_storage_usage"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."get_video_storage_usage"() IS '@omit';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."guard_profile_self_update"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-BEGIN
-  IF (SELECT auth.uid()) IS NOT NULL AND NOT (SELECT public.is_admin()) THEN
-    IF NEW.id                            IS DISTINCT FROM OLD.id
-    OR NEW.full_name                     IS DISTINCT FROM OLD.full_name
-    OR NEW.email                         IS DISTINCT FROM OLD.email
-    OR NEW.birth_date                    IS DISTINCT FROM OLD.birth_date
-    OR NEW.address                       IS DISTINCT FROM OLD.address
-    OR NEW.customer_number               IS DISTINCT FROM OLD.customer_number
-    OR NEW.is_active                     IS DISTINCT FROM OLD.is_active
-    OR NEW.role                          IS DISTINCT FROM OLD.role
-    OR NEW.level                         IS DISTINCT FROM OLD.level
-    OR NEW.can_book_individual           IS DISTINCT FROM OLD.can_book_individual
-    OR NEW.can_book_gruppe               IS DISTINCT FROM OLD.can_book_gruppe
-    OR NEW.can_book_athletik             IS DISTINCT FROM OLD.can_book_athletik
-    OR NEW.can_book_torhueter_individual IS DISTINCT FROM OLD.can_book_torhueter_individual
-    OR NEW.can_book_torhueter_gruppe     IS DISTINCT FROM OLD.can_book_torhueter_gruppe
-    OR NEW.skip_group_age_level_check    IS DISTINCT FROM OLD.skip_group_age_level_check
-    OR NEW.player_type                   IS DISTINCT FROM OLD.player_type
-    OR NEW.parent_name                   IS DISTINCT FROM OLD.parent_name
-    OR NEW.trainer_specialty             IS DISTINCT FROM OLD.trainer_specialty
-    THEN
-      RAISE EXCEPTION 'Nur ein Admin darf dieses Profilfeld ändern.';
+  BEGIN
+    IF (SELECT auth.uid()) IS NOT NULL AND NOT (SELECT public.is_admin()) THEN
+      IF NEW.id                            IS DISTINCT FROM OLD.id
+      OR NEW.full_name                     IS DISTINCT FROM OLD.full_name
+      OR NEW.email                         IS DISTINCT FROM OLD.email
+      OR NEW.birth_date                    IS DISTINCT FROM OLD.birth_date
+      OR NEW.address                       IS DISTINCT FROM OLD.address
+      OR NEW.customer_number               IS DISTINCT FROM OLD.customer_number
+      OR NEW.is_active                     IS DISTINCT FROM OLD.is_active
+      OR NEW.role                          IS DISTINCT FROM OLD.role
+      OR NEW.level                         IS DISTINCT FROM OLD.level
+      OR NEW.can_book_individual           IS DISTINCT FROM OLD.can_book_individual
+      OR NEW.can_book_gruppe               IS DISTINCT FROM OLD.can_book_gruppe
+      OR NEW.can_book_athletik             IS DISTINCT FROM OLD.can_book_athletik
+      OR NEW.can_book_torhueter_individual IS DISTINCT FROM OLD.can_book_torhueter_individual
+      OR NEW.can_book_torhueter_gruppe     IS DISTINCT FROM OLD.can_book_torhueter_gruppe
+      OR NEW.player_type                   IS DISTINCT FROM OLD.player_type
+      OR NEW.parent_name                   IS DISTINCT FROM OLD.parent_name
+      OR NEW.trainer_specialty             IS DISTINCT FROM OLD.trainer_specialty
+      OR NEW.skip_group_age_level_check    IS DISTINCT FROM OLD.skip_group_age_level_check
+      THEN
+        RAISE EXCEPTION 'Nur ein Admin darf dieses Profilfeld ändern.';
+      END IF;
     END IF;
-  END IF;
-  RETURN NEW;
-END;
-$$;
+    RETURN NEW;
+  END;
+  $$;
 
 
 ALTER FUNCTION "public"."guard_profile_self_update"() OWNER TO "postgres";
@@ -645,35 +672,89 @@ COMMENT ON FUNCTION "public"."is_admin"() IS '@omit';
 
 
 CREATE OR REPLACE FUNCTION "public"."is_bookable_day"("d" "date") RETURNS boolean
-    LANGUAGE "plpgsql" IMMUTABLE
+    LANGUAGE "plpgsql" STABLE
     SET "search_path" TO ''
     AS $$
-DECLARE
-  y int := EXTRACT(YEAR FROM d)::int;
-  e date := public.german_easter(EXTRACT(YEAR FROM d)::int);
-BEGIN
-  IF EXTRACT(ISODOW FROM d) IN (6, 7) THEN
-    RETURN false;
-  END IF;
-  IF d IN (
-    make_date(y, 1, 1),
-    e - 2,
-    e + 1,
-    make_date(y, 5, 1),
-    e + 39,
-    e + 50,
-    make_date(y, 10, 3),
-    make_date(y, 12, 25),
-    make_date(y, 12, 26)
-  ) THEN
-    RETURN false;
-  END IF;
-  RETURN true;
-END;
+declare
+  y int  := extract(year from d)::int;
+  e date := public.german_easter(extract(year from d)::int);
+begin
+  if extract(isodow from d) in (6, 7) then
+    return false;
+  end if;
+  if d in (
+    make_date(y, 1, 1),    -- Neujahr
+    e - 2,                 -- Karfreitag
+    e + 1,                 -- Ostermontag
+    make_date(y, 5, 1),    -- Tag der Arbeit
+    e + 39,                -- Christi Himmelfahrt
+    e + 50,                -- Pfingstmontag
+    e + 60,                -- Fronleichnam (Hessen)
+    make_date(y, 10, 3),   -- Tag der Deutschen Einheit
+    make_date(y, 12, 25),  -- 1. Weihnachtstag
+    make_date(y, 12, 26)   -- 2. Weihnachtstag
+  ) then
+    return false;
+  end if;
+  if exists (
+    select 1 from public.blocked_periods bp
+    where d between bp.start_date and bp.end_date
+  ) then
+    return false;
+  end if;
+  return true;
+end;
 $$;
 
 
 ALTER FUNCTION "public"."is_bookable_day"("d" "date") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."is_package_visible"("p_package_id" "uuid") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  SELECT public.is_admin() OR EXISTS (
+    SELECT 1 FROM public.video_package_trainers t
+    WHERE t.package_id = p_package_id
+      AND t.trainer_id = (SELECT auth.uid())
+  );
+$$;
+
+
+ALTER FUNCTION "public"."is_package_visible"("p_package_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."is_package_visible"("p_package_id" "uuid") IS '@omit';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."reset_all_package_assignments"() RETURNS integer
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_removed integer;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Nur Admins duerfen die Verteilung zuruecksetzen.';
+  END IF;
+
+  WITH deleted AS (
+    DELETE FROM public.video_package_trainers RETURNING 1
+  )
+  SELECT count(*)::integer INTO v_removed FROM deleted;
+
+  RETURN v_removed;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."reset_all_package_assignments"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."reset_all_package_assignments"() IS '@omit';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."rls_auto_enable"() RETURNS "event_trigger"
@@ -764,7 +845,6 @@ SET default_table_access_method = "heap";
 
 CREATE TABLE IF NOT EXISTS "public"."appointments" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "player_id" "uuid" NOT NULL,
     "date" "date" NOT NULL,
     "time" time without time zone NOT NULL,
     "status" "text" DEFAULT 'confirmed'::"text" NOT NULL,
@@ -778,6 +858,7 @@ CREATE TABLE IF NOT EXISTS "public"."appointments" (
     "makeup_count" integer DEFAULT 0 NOT NULL,
     "reminder_sent_at" timestamp with time zone,
     "location" "text",
+    "player_id" "uuid" NOT NULL,
     "short_notice_cancel" boolean DEFAULT false NOT NULL,
     CONSTRAINT "appointments_location_chk" CHECK ((("location" IS NULL) OR ("location" = ANY (ARRAY['Rüsselsheim'::"text", 'Kelsterbach'::"text", 'Groß-Gerau'::"text"])))),
     CONSTRAINT "appointments_program_check" CHECK (("program" = ANY (ARRAY['individual'::"text", 'gruppe'::"text", 'athletik'::"text", 'torhueter_individual'::"text", 'torhueter_gruppe'::"text"]))),
@@ -789,20 +870,63 @@ CREATE TABLE IF NOT EXISTS "public"."appointments" (
 ALTER TABLE "public"."appointments" OWNER TO "postgres";
 
 
+COMMENT ON COLUMN "public"."appointments"."short_notice_cancel" IS 'Kunde hat innerhalb der 3-Stunden-Frist storniert (Tracking im Terminkalender). Admin-Stornos bleiben false.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."blocked_periods" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "start_date" "date" NOT NULL,
+    "end_date" "date" NOT NULL,
+    "reason" "text" DEFAULT ''::"text" NOT NULL,
+    "source" "text" DEFAULT 'manual'::"text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "blocked_periods_date_order" CHECK (("end_date" >= "start_date"))
+);
+
+
+ALTER TABLE "public"."blocked_periods" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."cancellation_tokens" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "player_id" "uuid" NOT NULL,
     "category" "text" NOT NULL,
     "issued_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "expires_at" timestamp with time zone DEFAULT ("now"() + '1 mon'::interval) NOT NULL,
     "used_at" timestamp with time zone,
     "source_appointment_id" "uuid",
     "makeup_count" integer DEFAULT 0 NOT NULL,
+    "player_id" "uuid" NOT NULL,
     CONSTRAINT "cancellation_tokens_category_check" CHECK (("category" = ANY (ARRAY['individual'::"text", 'gruppe'::"text"])))
 );
 
 
 ALTER TABLE "public"."cancellation_tokens" OWNER TO "postgres";
+
+
+CREATE SEQUENCE IF NOT EXISTS "public"."customer_number_seq"
+    START WITH 101
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE "public"."customer_number_seq" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."notifications" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "title" "text" NOT NULL,
+    "body" "text" NOT NULL,
+    "location" "text",
+    "created_by" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "is_global" boolean DEFAULT true
+);
+
+
+ALTER TABLE "public"."notifications" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."players" (
@@ -829,31 +953,6 @@ CREATE TABLE IF NOT EXISTS "public"."players" (
 
 
 ALTER TABLE "public"."players" OWNER TO "postgres";
-
-
-CREATE SEQUENCE IF NOT EXISTS "public"."customer_number_seq"
-    START WITH 101
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE "public"."customer_number_seq" OWNER TO "postgres";
-
-
-CREATE TABLE IF NOT EXISTS "public"."notifications" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "title" "text" NOT NULL,
-    "body" "text" NOT NULL,
-    "location" "text",
-    "created_by" "uuid",
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    "is_global" boolean DEFAULT true
-);
-
-
-ALTER TABLE "public"."notifications" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."profiles" (
@@ -902,25 +1001,10 @@ CREATE TABLE IF NOT EXISTS "public"."trainer_schedules" (
 ALTER TABLE "public"."trainer_schedules" OWNER TO "postgres";
 
 
-CREATE TABLE IF NOT EXISTS "public"."trainer_videos" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "trainer_id" "uuid" NOT NULL,
-    "title" "text" NOT NULL,
-    "url" "text" NOT NULL,
-    "description" "text",
-    "created_by" "uuid",
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    "storage_path" "text"
-);
-
-
-ALTER TABLE "public"."trainer_videos" OWNER TO "postgres";
-
-
 CREATE OR REPLACE VIEW "public"."v_trainer_monthly_counts" WITH ("security_invoker"='on') AS
  SELECT "trainer_id",
     "to_char"(("date")::timestamp with time zone, 'YYYY-MM'::"text") AS "year_month",
-    ("count"(DISTINCT ("date", "time")))::integer AS "sessions"
+    ("count"(DISTINCT ROW("date", "time")))::integer AS "sessions"
    FROM "public"."appointments"
   WHERE (("status" = 'confirmed'::"text") AND ("date" < CURRENT_DATE) AND ("trainer_id" IS NOT NULL))
   GROUP BY "trainer_id", ("to_char"(("date")::timestamp with time zone, 'YYYY-MM'::"text"));
@@ -929,13 +1013,101 @@ CREATE OR REPLACE VIEW "public"."v_trainer_monthly_counts" WITH ("security_invok
 ALTER VIEW "public"."v_trainer_monthly_counts" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."video_package_items" (
+    "package_id" "uuid" NOT NULL,
+    "video_id" "uuid" NOT NULL,
+    "position" integer DEFAULT 0 NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."video_package_items" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."video_package_items" IS 'Inhalt eines Pakets. M:N, damit dasselbe Video ohne zweiten Upload in mehreren Paketen liegen kann.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."video_package_trainers" (
+    "package_id" "uuid" NOT NULL,
+    "trainer_id" "uuid" NOT NULL,
+    "assigned_by" "uuid",
+    "assigned_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "scheduled_time" time without time zone
+);
+
+
+ALTER TABLE "public"."video_package_trainers" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."video_package_trainers" IS 'Verteilung eines Pakets. Zeile entfernen = Zugriff entziehen; Paket und Videos bleiben bestehen.';
+
+
+
+COMMENT ON COLUMN "public"."video_package_trainers"."scheduled_time" IS 'Optionale Uhrzeit (HH:MM, ohne Datum) genau dieser Zuweisung. NULL = keine Zeit hinterlegt.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."video_packages" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "title" "text" NOT NULL,
+    "description" "text",
+    "created_by" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."video_packages" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."video_packages" IS 'Dauerhaft gespeicherte Zusammenstellung von Videos. Existiert unabhaengig davon, ob ihr aktuell Trainer zugewiesen sind.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."videos" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "title" "text" NOT NULL,
+    "description" "text",
+    "url" "text",
+    "storage_path" "text",
+    "mime_type" "text",
+    "size_bytes" bigint,
+    "original_filename" "text",
+    "created_by" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "videos_source_present" CHECK ((("url" IS NOT NULL) OR ("storage_path" IS NOT NULL)))
+);
+
+
+ALTER TABLE "public"."videos" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."videos" IS 'Video-Bibliothek. Gehoert keinem Trainer; Sichtbarkeit ergibt sich aus der Paket-Zuweisung.';
+
+
+
+COMMENT ON COLUMN "public"."videos"."storage_path" IS 'NULL = externer Link (url), sonst Objektpfad im Bucket trainer-videos.';
+
+
+
 ALTER TABLE ONLY "public"."appointments"
     ADD CONSTRAINT "appointments_pkey" PRIMARY KEY ("id");
 
 
 
+ALTER TABLE ONLY "public"."blocked_periods"
+    ADD CONSTRAINT "blocked_periods_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."cancellation_tokens"
     ADD CONSTRAINT "cancellation_tokens_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."notifications"
+    ADD CONSTRAINT "notifications_pkey" PRIMARY KEY ("id");
 
 
 
@@ -946,11 +1118,6 @@ ALTER TABLE ONLY "public"."players"
 
 ALTER TABLE ONLY "public"."players"
     ADD CONSTRAINT "players_player_number_key" UNIQUE ("player_number");
-
-
-
-ALTER TABLE ONLY "public"."notifications"
-    ADD CONSTRAINT "notifications_pkey" PRIMARY KEY ("id");
 
 
 
@@ -974,8 +1141,27 @@ ALTER TABLE ONLY "public"."trainer_schedules"
 
 
 
-ALTER TABLE ONLY "public"."trainer_videos"
-    ADD CONSTRAINT "trainer_videos_pkey" PRIMARY KEY ("id");
+ALTER TABLE ONLY "public"."video_package_items"
+    ADD CONSTRAINT "video_package_items_pkey" PRIMARY KEY ("package_id", "video_id");
+
+
+
+ALTER TABLE ONLY "public"."video_package_trainers"
+    ADD CONSTRAINT "video_package_trainers_pkey" PRIMARY KEY ("package_id", "trainer_id");
+
+
+
+ALTER TABLE ONLY "public"."video_packages"
+    ADD CONSTRAINT "video_packages_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."videos"
+    ADD CONSTRAINT "videos_pkey" PRIMARY KEY ("id");
+
+
+
+CREATE INDEX "blocked_periods_range_idx" ON "public"."blocked_periods" USING "btree" ("start_date", "end_date");
 
 
 
@@ -984,6 +1170,10 @@ CREATE INDEX "idx_appointments_date_status" ON "public"."appointments" USING "bt
 
 
 CREATE INDEX "idx_appointments_date_time_program_status" ON "public"."appointments" USING "btree" ("date", "time", "program", "status");
+
+
+
+CREATE INDEX "idx_appointments_player_date_status" ON "public"."appointments" USING "btree" ("player_id", "date", "status");
 
 
 
@@ -999,15 +1189,11 @@ CREATE INDEX "idx_appointments_trainer_id" ON "public"."appointments" USING "btr
 
 
 
-CREATE INDEX "idx_appointments_player_date_status" ON "public"."appointments" USING "btree" ("player_id", "date", "status");
-
-
-
 CREATE INDEX "idx_notifications_created_by" ON "public"."notifications" USING "btree" ("created_by");
 
 
 
-CREATE UNIQUE INDEX "idx_tokens_unique_source" ON "public"."cancellation_tokens" USING "btree" ("source_appointment_id") WHERE ("source_appointment_id" IS NOT NULL);
+CREATE INDEX "idx_players_parent_id" ON "public"."players" USING "btree" ("parent_id");
 
 
 
@@ -1015,7 +1201,7 @@ CREATE INDEX "idx_tokens_player_active" ON "public"."cancellation_tokens" USING 
 
 
 
-CREATE INDEX "idx_players_parent_id" ON "public"."players" USING "btree" ("parent_id");
+CREATE UNIQUE INDEX "idx_tokens_unique_source" ON "public"."cancellation_tokens" USING "btree" ("source_appointment_id") WHERE ("source_appointment_id" IS NOT NULL);
 
 
 
@@ -1027,11 +1213,27 @@ CREATE INDEX "idx_trainer_schedules_trainer_day" ON "public"."trainer_schedules"
 
 
 
-CREATE INDEX "idx_trainer_videos_created_by" ON "public"."trainer_videos" USING "btree" ("created_by");
+CREATE INDEX "idx_video_packages_created_by" ON "public"."video_packages" USING "btree" ("created_by");
 
 
 
-CREATE INDEX "idx_trainer_videos_trainer_id" ON "public"."trainer_videos" USING "btree" ("trainer_id");
+CREATE INDEX "idx_videos_created_by" ON "public"."videos" USING "btree" ("created_by");
+
+
+
+CREATE UNIQUE INDEX "idx_videos_storage_path" ON "public"."videos" USING "btree" ("storage_path") WHERE ("storage_path" IS NOT NULL);
+
+
+
+CREATE INDEX "idx_vpi_video_id" ON "public"."video_package_items" USING "btree" ("video_id");
+
+
+
+CREATE INDEX "idx_vpt_assigned_by" ON "public"."video_package_trainers" USING "btree" ("assigned_by");
+
+
+
+CREATE INDEX "idx_vpt_trainer_id" ON "public"."video_package_trainers" USING "btree" ("trainer_id");
 
 
 
@@ -1064,17 +1266,12 @@ CREATE OR REPLACE TRIGGER "trainer_schedules_migrate_appts" AFTER UPDATE ON "pub
 
 
 ALTER TABLE ONLY "public"."appointments"
-    ADD CONSTRAINT "appointments_trainer_id_fkey" FOREIGN KEY ("trainer_id") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
-
-
-
-ALTER TABLE ONLY "public"."appointments"
     ADD CONSTRAINT "appointments_player_id_fkey" FOREIGN KEY ("player_id") REFERENCES "public"."players"("id") ON DELETE CASCADE;
 
 
 
-ALTER TABLE ONLY "public"."cancellation_tokens"
-    ADD CONSTRAINT "cancellation_tokens_source_appointment_id_fkey" FOREIGN KEY ("source_appointment_id") REFERENCES "public"."appointments"("id") ON DELETE SET NULL;
+ALTER TABLE ONLY "public"."appointments"
+    ADD CONSTRAINT "appointments_trainer_id_fkey" FOREIGN KEY ("trainer_id") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
 
 
 
@@ -1083,13 +1280,18 @@ ALTER TABLE ONLY "public"."cancellation_tokens"
 
 
 
-ALTER TABLE ONLY "public"."players"
-    ADD CONSTRAINT "players_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."cancellation_tokens"
+    ADD CONSTRAINT "cancellation_tokens_source_appointment_id_fkey" FOREIGN KEY ("source_appointment_id") REFERENCES "public"."appointments"("id") ON DELETE SET NULL;
 
 
 
 ALTER TABLE ONLY "public"."notifications"
     ADD CONSTRAINT "notifications_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."players"
+    ADD CONSTRAINT "players_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
 
 
 
@@ -1103,13 +1305,38 @@ ALTER TABLE ONLY "public"."trainer_schedules"
 
 
 
-ALTER TABLE ONLY "public"."trainer_videos"
-    ADD CONSTRAINT "trainer_videos_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
+ALTER TABLE ONLY "public"."video_package_items"
+    ADD CONSTRAINT "video_package_items_package_id_fkey" FOREIGN KEY ("package_id") REFERENCES "public"."video_packages"("id") ON DELETE CASCADE;
 
 
 
-ALTER TABLE ONLY "public"."trainer_videos"
-    ADD CONSTRAINT "trainer_videos_trainer_id_fkey" FOREIGN KEY ("trainer_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+ALTER TABLE ONLY "public"."video_package_items"
+    ADD CONSTRAINT "video_package_items_video_id_fkey" FOREIGN KEY ("video_id") REFERENCES "public"."videos"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."video_package_trainers"
+    ADD CONSTRAINT "video_package_trainers_assigned_by_fkey" FOREIGN KEY ("assigned_by") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."video_package_trainers"
+    ADD CONSTRAINT "video_package_trainers_package_id_fkey" FOREIGN KEY ("package_id") REFERENCES "public"."video_packages"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."video_package_trainers"
+    ADD CONSTRAINT "video_package_trainers_trainer_id_fkey" FOREIGN KEY ("trainer_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."video_packages"
+    ADD CONSTRAINT "video_packages_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."videos"
+    ADD CONSTRAINT "videos_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
 
 
 
@@ -1124,7 +1351,9 @@ CREATE POLICY "appointments_insert" ON "public"."appointments" FOR INSERT TO "au
 
 
 
-CREATE POLICY "appointments_select" ON "public"."appointments" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR ("player_id" IN ( SELECT "id" FROM "public"."players" WHERE ("parent_id" = ( SELECT "auth"."uid"() AS "uid")))) OR (("trainer_id" IS NOT NULL) AND (( SELECT "auth"."uid"() AS "uid") = "trainer_id"))));
+CREATE POLICY "appointments_select" ON "public"."appointments" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR ("player_id" IN ( SELECT "players"."id"
+   FROM "public"."players"
+  WHERE ("players"."parent_id" = ( SELECT "auth"."uid"() AS "uid")))) OR (("trainer_id" IS NOT NULL) AND (( SELECT "auth"."uid"() AS "uid") = "trainer_id"))));
 
 
 
@@ -1132,22 +1361,14 @@ CREATE POLICY "appointments_update" ON "public"."appointments" FOR UPDATE TO "au
 
 
 
-ALTER TABLE "public"."players" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."blocked_periods" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "players_select" ON "public"."players" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR ("parent_id" = ( SELECT "auth"."uid"() AS "uid")) OR (EXISTS ( SELECT 1 FROM "public"."profiles" "p" WHERE (("p"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("p"."role" = 'trainer'::"text"))))));
-
-
-
-CREATE POLICY "players_insert" ON "public"."players" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "public"."is_admin"() AS "is_admin"));
+CREATE POLICY "blocked_periods_admin_write" ON "public"."blocked_periods" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
 
 
 
-CREATE POLICY "players_update" ON "public"."players" FOR UPDATE TO "authenticated" USING (( SELECT "public"."is_admin"() AS "is_admin")) WITH CHECK (( SELECT "public"."is_admin"() AS "is_admin"));
-
-
-
-CREATE POLICY "players_delete" ON "public"."players" FOR DELETE TO "authenticated" USING (( SELECT "public"."is_admin"() AS "is_admin"));
+CREATE POLICY "blocked_periods_select_all" ON "public"."blocked_periods" FOR SELECT USING (true);
 
 
 
@@ -1170,6 +1391,27 @@ CREATE POLICY "notifications_select" ON "public"."notifications" FOR SELECT TO "
 
 
 CREATE POLICY "notifications_update" ON "public"."notifications" FOR UPDATE TO "authenticated" USING (( SELECT "public"."is_admin"() AS "is_admin")) WITH CHECK (( SELECT "public"."is_admin"() AS "is_admin"));
+
+
+
+ALTER TABLE "public"."players" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "players_delete" ON "public"."players" FOR DELETE TO "authenticated" USING (( SELECT "public"."is_admin"() AS "is_admin"));
+
+
+
+CREATE POLICY "players_insert" ON "public"."players" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "public"."is_admin"() AS "is_admin"));
+
+
+
+CREATE POLICY "players_select" ON "public"."players" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR ("parent_id" = ( SELECT "auth"."uid"() AS "uid")) OR (EXISTS ( SELECT 1
+   FROM "public"."profiles" "p"
+  WHERE (("p"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("p"."role" = 'trainer'::"text"))))));
+
+
+
+CREATE POLICY "players_update" ON "public"."players" FOR UPDATE TO "authenticated" USING (( SELECT "public"."is_admin"() AS "is_admin")) WITH CHECK (( SELECT "public"."is_admin"() AS "is_admin"));
 
 
 
@@ -1204,7 +1446,9 @@ CREATE POLICY "tokens_insert" ON "public"."cancellation_tokens" FOR INSERT TO "a
 
 
 
-CREATE POLICY "tokens_select" ON "public"."cancellation_tokens" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR ("player_id" IN ( SELECT "id" FROM "public"."players" WHERE ("parent_id" = ( SELECT "auth"."uid"() AS "uid"))))));
+CREATE POLICY "tokens_select" ON "public"."cancellation_tokens" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR ("player_id" IN ( SELECT "players"."id"
+   FROM "public"."players"
+  WHERE ("players"."parent_id" = ( SELECT "auth"."uid"() AS "uid"))))));
 
 
 
@@ -1215,30 +1459,58 @@ CREATE POLICY "tokens_update" ON "public"."cancellation_tokens" FOR UPDATE TO "a
 ALTER TABLE "public"."trainer_schedules" ENABLE ROW LEVEL SECURITY;
 
 
-ALTER TABLE "public"."trainer_videos" ENABLE ROW LEVEL SECURITY;
-
-
-CREATE POLICY "trainer_videos_delete" ON "public"."trainer_videos" FOR DELETE TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR (( SELECT "auth"."uid"() AS "uid") = "trainer_id")));
-
-
-
-CREATE POLICY "trainer_videos_insert" ON "public"."trainer_videos" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "public"."is_admin"() AS "is_admin") OR (( SELECT "auth"."uid"() AS "uid") = "trainer_id")));
-
-
-
-CREATE POLICY "trainer_videos_select" ON "public"."trainer_videos" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR (( SELECT "auth"."uid"() AS "uid") = "trainer_id")));
-
-
-
-CREATE POLICY "trainer_videos_update" ON "public"."trainer_videos" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR (( SELECT "auth"."uid"() AS "uid") = "trainer_id"))) WITH CHECK ((( SELECT "public"."is_admin"() AS "is_admin") OR (( SELECT "auth"."uid"() AS "uid") = "trainer_id")));
-
-
-
 CREATE POLICY "ts_admin_write" ON "public"."trainer_schedules" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
 
 
 
 CREATE POLICY "ts_read" ON "public"."trainer_schedules" FOR SELECT TO "authenticated" USING (true);
+
+
+
+ALTER TABLE "public"."video_package_items" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "video_package_items_select" ON "public"."video_package_items" FOR SELECT TO "authenticated" USING ("public"."is_package_visible"("package_id"));
+
+
+
+CREATE POLICY "video_package_items_write" ON "public"."video_package_items" TO "authenticated" USING (( SELECT "public"."is_admin"() AS "is_admin")) WITH CHECK (( SELECT "public"."is_admin"() AS "is_admin"));
+
+
+
+ALTER TABLE "public"."video_package_trainers" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "video_package_trainers_select" ON "public"."video_package_trainers" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR ("trainer_id" = ( SELECT "auth"."uid"() AS "uid"))));
+
+
+
+CREATE POLICY "video_package_trainers_write" ON "public"."video_package_trainers" TO "authenticated" USING (( SELECT "public"."is_admin"() AS "is_admin")) WITH CHECK (( SELECT "public"."is_admin"() AS "is_admin"));
+
+
+
+ALTER TABLE "public"."video_packages" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "video_packages_select" ON "public"."video_packages" FOR SELECT TO "authenticated" USING ("public"."is_package_visible"("id"));
+
+
+
+CREATE POLICY "video_packages_write" ON "public"."video_packages" TO "authenticated" USING (( SELECT "public"."is_admin"() AS "is_admin")) WITH CHECK (( SELECT "public"."is_admin"() AS "is_admin"));
+
+
+
+ALTER TABLE "public"."videos" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "videos_select" ON "public"."videos" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR (EXISTS ( SELECT 1
+   FROM ("public"."video_package_items" "i"
+     JOIN "public"."video_package_trainers" "t" ON (("t"."package_id" = "i"."package_id")))
+  WHERE (("i"."video_id" = "videos"."id") AND ("t"."trainer_id" = ( SELECT "auth"."uid"() AS "uid")))))));
+
+
+
+CREATE POLICY "videos_write" ON "public"."videos" TO "authenticated" USING (( SELECT "public"."is_admin"() AS "is_admin")) WITH CHECK (( SELECT "public"."is_admin"() AS "is_admin"));
 
 
 
@@ -1255,11 +1527,11 @@ ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."appointments";
 
 
 
-ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."trainer_schedules";
-
-
-
 ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."players";
+
+
+
+ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."trainer_schedules";
 
 
 
@@ -1451,7 +1723,6 @@ GRANT ALL ON FUNCTION "public"."assign_customer_number"() TO "service_role";
 
 
 
-REVOKE ALL ON FUNCTION "public"."assign_player_number"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."assign_player_number"() TO "anon";
 GRANT ALL ON FUNCTION "public"."assign_player_number"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."assign_player_number"() TO "service_role";
@@ -1519,6 +1790,13 @@ GRANT ALL ON FUNCTION "public"."get_trainer_monthly_counts"() TO "service_role";
 
 
 
+REVOKE ALL ON FUNCTION "public"."get_video_storage_usage"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_video_storage_usage"() TO "anon";
+GRANT ALL ON FUNCTION "public"."get_video_storage_usage"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_video_storage_usage"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."guard_profile_self_update"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."guard_profile_self_update"() TO "service_role";
 
@@ -1533,6 +1811,20 @@ GRANT ALL ON FUNCTION "public"."is_admin"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."is_bookable_day"("d" "date") TO "anon";
 GRANT ALL ON FUNCTION "public"."is_bookable_day"("d" "date") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."is_bookable_day"("d" "date") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."is_package_visible"("p_package_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."is_package_visible"("p_package_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."is_package_visible"("p_package_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."is_package_visible"("p_package_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."reset_all_package_assignments"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."reset_all_package_assignments"() TO "anon";
+GRANT ALL ON FUNCTION "public"."reset_all_package_assignments"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."reset_all_package_assignments"() TO "service_role";
 
 
 
@@ -1578,15 +1870,15 @@ GRANT ALL ON TABLE "public"."appointments" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."blocked_periods" TO "anon";
+GRANT ALL ON TABLE "public"."blocked_periods" TO "authenticated";
+GRANT ALL ON TABLE "public"."blocked_periods" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."cancellation_tokens" TO "anon";
 GRANT ALL ON TABLE "public"."cancellation_tokens" TO "authenticated";
 GRANT ALL ON TABLE "public"."cancellation_tokens" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."players" TO "anon";
-GRANT ALL ON TABLE "public"."players" TO "authenticated";
-GRANT ALL ON TABLE "public"."players" TO "service_role";
 
 
 
@@ -1602,6 +1894,12 @@ GRANT ALL ON TABLE "public"."notifications" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."players" TO "anon";
+GRANT ALL ON TABLE "public"."players" TO "authenticated";
+GRANT ALL ON TABLE "public"."players" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."profiles" TO "anon";
 GRANT ALL ON TABLE "public"."profiles" TO "authenticated";
 GRANT ALL ON TABLE "public"."profiles" TO "service_role";
@@ -1614,13 +1912,31 @@ GRANT ALL ON TABLE "public"."trainer_schedules" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."trainer_videos" TO "anon";
-GRANT ALL ON TABLE "public"."trainer_videos" TO "authenticated";
-GRANT ALL ON TABLE "public"."trainer_videos" TO "service_role";
-
-
-
 GRANT ALL ON TABLE "public"."v_trainer_monthly_counts" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."video_package_items" TO "anon";
+GRANT ALL ON TABLE "public"."video_package_items" TO "authenticated";
+GRANT ALL ON TABLE "public"."video_package_items" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."video_package_trainers" TO "anon";
+GRANT ALL ON TABLE "public"."video_package_trainers" TO "authenticated";
+GRANT ALL ON TABLE "public"."video_package_trainers" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."video_packages" TO "anon";
+GRANT ALL ON TABLE "public"."video_packages" TO "authenticated";
+GRANT ALL ON TABLE "public"."video_packages" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."videos" TO "anon";
+GRANT ALL ON TABLE "public"."videos" TO "authenticated";
+GRANT ALL ON TABLE "public"."videos" TO "service_role";
 
 
 
