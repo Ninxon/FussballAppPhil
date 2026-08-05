@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { AdminVideoPackage, VideoAsset, VideoStorageUsage } from '../../types';
+import { AdminVideoPackage, PackageAssignment, VideoAsset, VideoStorageUsage } from '../../types';
 import { MutationResult } from './useAdminData';
 import * as svc from '../services/videoPackageService';
 
@@ -120,12 +120,29 @@ export function useVideoPackages() {
 
   // ── Verteilung ───────────────────────────────────────────────────────────
 
-  const setPackageTrainers = async (packageId: string, trainerIds: string[]): Promise<MutationResult> => {
-    const current = packages.find(p => p.id === packageId)?.trainerIds ?? [];
-    const { error } = await svc.setPackageTrainers(packageId, trainerIds, current);
-    if (error) return { error };
-    setPackages(prev => prev.map(p => p.id === packageId ? { ...p, trainerIds } : p));
+  const setPackageTrainers = async (
+    packageId: string, assignments: PackageAssignment[],
+  ): Promise<MutationResult> => {
+    const current = packages.find(p => p.id === packageId)?.assignments ?? [];
+    const { error } = await svc.setPackageTrainers(packageId, assignments, current);
+    if (error) {
+      // Upsert und Delete laufen ohne Transaktionsklammer: das erste kann
+      // geglückt und das zweite gescheitert sein. Ohne diesen Reload zeigte
+      // die Oberfläche danach einen Zustand, den es in der Datenbank nicht gibt.
+      await load();
+      return { error };
+    }
+    setPackages(prev => prev.map(p => p.id === packageId ? { ...p, assignments } : p));
     return { error: null };
+  };
+
+  const resetAllAssignments = async (): Promise<MutationResult & { removed?: number }> => {
+    const res = await svc.resetAllAssignments();
+    if (!res.ok) return { error: res.error };
+    // Voller Reload statt lokalem Leeren: die Aktion trifft jedes Paket, ein
+    // selbstgebauter lokaler Zustand waere hier nur eine Fehlerquelle.
+    await load();
+    return { error: null, removed: res.data };
   };
 
   // ── Bibliothek ───────────────────────────────────────────────────────────
@@ -178,7 +195,7 @@ export function useVideoPackages() {
     packages, library, usage, packageCounts, loading, loadError,
     createPackage, updatePackage, deletePackage, duplicatePackage,
     addVideoToPackage, removeVideoFromPackage, moveVideo,
-    setPackageTrainers,
+    setPackageTrainers, resetAllAssignments,
     uploadVideo, createLinkVideo, deleteVideo, cleanupOrphans,
     reload: load,
   };

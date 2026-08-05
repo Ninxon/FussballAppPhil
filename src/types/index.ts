@@ -125,9 +125,21 @@ export type VideoPackage = {
   videos: VideoAsset[];
 };
 
+/**
+ * Eine Verteilung: an wen, und optional zu welcher Uhrzeit.
+ *
+ * Die Uhrzeit haengt an der Zuweisung, nicht am Paket — dasselbe Paket kann
+ * bei zwei Trainern zu verschiedenen Zeiten laufen.
+ */
+export type PackageAssignment = {
+  trainerId: string;
+  /** 'HH:MM' aus SLOTS (src/constants/slots.ts) oder null. Ohne Datum, ohne Zeitzone. */
+  scheduledTime: string | null;
+};
+
 /** Ergaenzt ein Paket in der Admin-Sicht um die Verteilung. */
 export type AdminVideoPackage = VideoPackage & {
-  trainerIds: string[];
+  assignments: PackageAssignment[];
 };
 
 export type VideoStorageUsage = {

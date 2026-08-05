@@ -1,6 +1,6 @@
 // Design-Tokens des Video-Pakete-Bereichs. Werte wie im uebrigen Admin
-// (siehe TrainerVideosScreen/KundenDetail): heller Hintergrund, Navy fuer
-// Text und Primaeraktionen, Blau als Akzent.
+// (siehe KundenDetail): heller Hintergrund, Navy fuer Text und
+// Primaeraktionen, Blau als Akzent.
 export const C = {
   bg:          '#EEF3FB',
   surface:     '#FFFFFF',

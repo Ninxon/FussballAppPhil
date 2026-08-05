@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput, Linking } from 'react-native';
-import { AdminVideoPackage, VideoAsset } from '../../../types';
+import { AdminVideoPackage, PackageAssignment, VideoAsset } from '../../../types';
 import { TrainerProfile } from '../../hooks/useAdminData';
 import { resolvePlaybackUrl } from '../../../services/videoService';
 import { formatBytes } from '../../services/videoValidation';
@@ -23,7 +23,7 @@ interface Props {
   onRemoveVideo: (videoId: string) => Promise<{ error: string | null }>;
   onDeleteVideo: (video: VideoAsset) => Promise<{ error: string | null }>;
   onMoveVideo: (videoId: string, direction: -1 | 1) => Promise<{ error: string | null }>;
-  onAssign: (trainerIds: string[]) => Promise<{ error: string | null }>;
+  onAssign: (assignments: PackageAssignment[]) => Promise<{ error: string | null }>;
 }
 
 type Pending =
@@ -54,6 +54,7 @@ export function PackageDetail({
   }, [pkg.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalBytes = pkg.videos.reduce((sum, v) => sum + (v.size_bytes ?? 0), 0);
+  const withTime = pkg.assignments.filter(a => a.scheduledTime).length;
 
   const doRename = async () => {
     if (!title.trim()) { setError('Bitte einen Namen eingeben.'); return; }
@@ -128,9 +129,10 @@ export function PackageDetail({
                   {pkg.videos.length} {pkg.videos.length === 1 ? 'Video' : 'Videos'}
                   {totalBytes > 0 ? ` · ${formatBytes(totalBytes)}` : ''}
                   {' · '}
-                  {pkg.trainerIds.length === 0
+                  {pkg.assignments.length === 0
                     ? 'noch nicht verteilt'
-                    : `an ${pkg.trainerIds.length} Trainer verteilt`}
+                    : `an ${pkg.assignments.length} Trainer verteilt`}
+                  {withTime > 0 ? ` · ${withTime} mit Uhrzeit` : ''}
                 </Text>
                 {pkg.description ? <Text style={[styles.hint, { marginTop: 8 }]}>{pkg.description}</Text> : null}
               </View>
@@ -155,8 +157,8 @@ export function PackageDetail({
           <ConfirmBox
             title="Paket löschen?"
             text={
-              pkg.trainerIds.length > 0
-                ? `${pkg.trainerIds.length} ${pkg.trainerIds.length === 1 ? 'Trainer verliert' : 'Trainer verlieren'} den Zugriff. `
+              pkg.assignments.length > 0
+                ? `${pkg.assignments.length} ${pkg.assignments.length === 1 ? 'Trainer verliert' : 'Trainer verlieren'} den Zugriff. `
                   + 'Die Videos bleiben in der Bibliothek erhalten und können weiter verwendet werden.'
                 : 'Die Videos bleiben in der Bibliothek erhalten und können weiter verwendet werden.'
             }
@@ -231,7 +233,7 @@ export function PackageDetail({
       )}
 
       {/* ── Verteilung ── */}
-      <TrainerAssignPanel trainers={trainers} assignedIds={pkg.trainerIds} onSave={onAssign} />
+      <TrainerAssignPanel trainers={trainers} assigned={pkg.assignments} onSave={onAssign} />
     </>
   );
 }

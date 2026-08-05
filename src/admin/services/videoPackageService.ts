@@ -1,7 +1,8 @@
 import { supabase } from '../../lib/supabase';
-import { AdminVideoPackage, VideoAsset, VideoStorageUsage } from '../../types';
+import { AdminVideoPackage, PackageAssignment, VideoAsset, VideoStorageUsage } from '../../types';
 import { VIDEO_BUCKET } from '../../services/videoService';
 import { libraryStoragePath } from './videoValidation';
+import { diffAssignments } from './assignmentRules';
 
 // Sämtliches I/O rund um Video-Pakete: Datenbank UND Storage. Die reinen
 // Regeln liegen daneben in videoValidation.ts (dort ohne supabase-Import,
@@ -39,7 +40,7 @@ export async function fetchPackages(): Promise<Result<AdminVideoPackage[]>> {
     .select(`
       id, title, description, created_at,
       video_package_items ( position, videos ( id, title, description, url, storage_path, mime_type, size_bytes, original_filename, created_at ) ),
-      video_package_trainers ( trainer_id )
+      video_package_trainers ( trainer_id, scheduled_time )
     `)
     .order('created_at', { ascending: false });
 
@@ -55,7 +56,14 @@ export async function fetchPackages(): Promise<Result<AdminVideoPackage[]>> {
       .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
       .map((i: any) => i.videos)
       .filter(Boolean) as VideoAsset[],
-    trainerIds: (p.video_package_trainers ?? []).map((t: any) => t.trainer_id),
+    assignments: (p.video_package_trainers ?? []).map((t: any) => ({
+      trainerId: t.trainer_id,
+      // PostgREST liefert den nativen time-Typ als "HH:MM:SS". Ohne die
+      // Kuerzung auf HH:MM verglichen sich Auswahl ("18:00") und Ist-Zustand
+      // ("18:00:00") nie als gleich — der Speichern-Button bliebe dauerhaft
+      // sichtbar. Gleiches Muster wie in useTrainerData.
+      scheduledTime: t.scheduled_time ? String(t.scheduled_time).slice(0, 5) : null,
+    })),
   }));
 
   return succeed(packages);
@@ -182,20 +190,29 @@ export async function reorderPackageVideos(
 // ── Verteilung ─────────────────────────────────────────────────────────────
 
 /**
- * Setzt die Trainer-Zuweisung eines Pakets auf genau `trainerIds` und
- * schreibt dabei nur die Differenz. Eine entfernte Zuweisung nimmt lediglich
- * den Zugriff — Paket und Videos bleiben unberührt.
+ * Setzt die Verteilung eines Pakets auf genau `next` und schreibt dabei nur
+ * die Differenz. Eine entfernte Zuweisung nimmt lediglich den Zugriff — Paket
+ * und Videos bleiben unberührt.
  */
 export async function setPackageTrainers(
-  packageId: string, trainerIds: string[], currentIds: string[],
+  packageId: string, next: PackageAssignment[], current: PackageAssignment[],
 ): Promise<{ error: string | null }> {
-  const toAdd = trainerIds.filter(id => !currentIds.includes(id));
-  const toRemove = currentIds.filter(id => !trainerIds.includes(id));
+  const { toUpsert, toRemove } = diffAssignments(current, next);
 
-  if (toAdd.length > 0) {
+  if (toUpsert.length > 0) {
     const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase.from('video_package_trainers').insert(
-      toAdd.map(trainer_id => ({ package_id: packageId, trainer_id, assigned_by: user?.id ?? null })),
+    // Upsert statt Insert: der Primärschlüssel (package_id, trainer_id) fängt
+    // bereits zugewiesene Trainer ab, deren Uhrzeit sich geändert hat.
+    // assigned_at bleibt dabei erhalten — der Default greift nur beim Insert
+    // und die Spalte steht nicht im Payload.
+    const { error } = await supabase.from('video_package_trainers').upsert(
+      toUpsert.map(a => ({
+        package_id: packageId,
+        trainer_id: a.trainerId,
+        scheduled_time: a.scheduledTime, // null entfernt eine gesetzte Uhrzeit
+        assigned_by: user?.id ?? null,
+      })),
+      { onConflict: 'package_id,trainer_id' },
     );
     if (error) return { error: msg(error, 'Zuweisung konnte nicht gespeichert werden.') };
   }
@@ -210,6 +227,19 @@ export async function setPackageTrainers(
   }
 
   return { error: null };
+}
+
+/**
+ * Entfernt ALLE Zuweisungen aller Pakete inkl. der Uhrzeiten und liefert die
+ * Anzahl. Pakete, Videos und Dateien bleiben unberührt.
+ *
+ * Als RPC und nicht als `.delete()`, weil RLS lautlos filtert: ein Nicht-Admin
+ * bekäme sonst „erfolgreich, 0 Zeilen" statt einer Fehlermeldung.
+ */
+export async function resetAllAssignments(): Promise<Result<number>> {
+  const { data, error } = await supabase.rpc('reset_all_package_assignments');
+  if (error) return fail(msg(error, 'Die Verteilung konnte nicht zurückgesetzt werden.'));
+  return succeed(Number(data ?? 0));
 }
 
 // ── Videos (Bibliothek) ────────────────────────────────────────────────────

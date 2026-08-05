@@ -5,6 +5,7 @@ import { useVideoPackages } from '../hooks/useVideoPackages';
 import { PackageList } from './videoPakete/PackageList';
 import { PackageDetail } from './videoPakete/PackageDetail';
 import { StorageMeter } from './videoPakete/StorageMeter';
+import { ResetAssignmentsPanel } from './videoPakete/ResetAssignmentsPanel';
 import { C } from './videoPakete/theme';
 import { styles } from './videoPakete/styles';
 
@@ -76,9 +77,15 @@ export function VideoPaketeScreen({ trainers }: Props) {
             onRemoveVideo={videoId => vp.removeVideoFromPackage(selected.id, videoId)}
             onDeleteVideo={video => vp.deleteVideo(video)}
             onMoveVideo={(videoId, dir) => vp.moveVideo(selected.id, videoId, dir)}
-            onAssign={trainerIds => vp.setPackageTrainers(selected.id, trainerIds)}
+            onAssign={assignments => vp.setPackageTrainers(selected.id, assignments)}
           />
         )}
+
+        <ResetAssignmentsPanel
+          totalAssignments={vp.packages.reduce((n, p) => n + p.assignments.length, 0)}
+          packagesWithAssignments={vp.packages.filter(p => p.assignments.length > 0).length}
+          onReset={vp.resetAllAssignments}
+        />
       </ScrollView>
     </View>
   );

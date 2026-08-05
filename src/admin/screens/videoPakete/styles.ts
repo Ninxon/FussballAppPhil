@@ -129,9 +129,11 @@ export const styles = StyleSheet.create({
 
   // ── Trainer-Zuweisung ────────────────────────────────────────────────────
   trainerRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.bg,
   },
+  // Nur Checkbox + Name sind klickbar. Laege die Uhrzeit-Auswahl mit im
+  // Touchable, wuerde jeder Klick auf einen Zeit-Chip die Zuweisung aufheben.
+  trainerRowMain: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   checkbox: {
     width: 20, height: 20, borderRadius: 6, borderWidth: 2, borderColor: C.border,
     alignItems: 'center', justifyContent: 'center', backgroundColor: C.surface,
@@ -140,6 +142,22 @@ export const styles = StyleSheet.create({
   checkboxMark: { fontSize: 12, fontWeight: '800', color: '#fff' },
   trainerName: { flex: 1, fontSize: 14, fontWeight: '600', color: C.textMid },
   trainerSpec: { fontSize: 12, color: C.textFaint },
+
+  // ── Uhrzeit-Auswahl ──────────────────────────────────────────────────────
+  // Chips wie im Terminformular (kundenDetail/AppointmentsSection). Bewusst
+  // dupliziert statt quer importiert: die Style-Dateien der Screen-Ordner
+  // sind im Projekt getrennt.
+  slotRowInline: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 6,
+    marginTop: 8, marginLeft: 32,
+  },
+  slotChip: {
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
+    borderWidth: 1.5, borderColor: C.border, backgroundColor: C.surface,
+  },
+  slotChipActive: { borderColor: C.accent, backgroundColor: C.accentBg },
+  slotChipText: { fontSize: 12, fontWeight: '600', color: C.textLight },
+  slotChipTextActive: { color: C.accent },
 
   // ── Bestaetigung ─────────────────────────────────────────────────────────
   confirmBox: {

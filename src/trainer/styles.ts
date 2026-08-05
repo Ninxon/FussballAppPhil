@@ -108,6 +108,17 @@ export const styles = StyleSheet.create({
   backLink: { fontSize: 14, fontWeight: '700', color: '#4A7FD4' },
   packageDetailTitle: { fontSize: 20, fontWeight: '800', color: '#111827', marginBottom: 6 },
   packageDetailDesc: { fontSize: 14, color: '#6B7280', lineHeight: 20, marginBottom: 14 },
+  // Uhrzeit der Einheit — als Badge, damit sie nicht in der grauen Metazeile untergeht.
+  timeBadge: { backgroundColor: 'rgba(74,127,212,0.1)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, flexShrink: 0 },
+  timeBadgeText: { fontSize: 13, fontWeight: '700', color: '#4A7FD4' },
+  packageDetailTime: { fontSize: 14, fontWeight: '700', color: '#4A7FD4', marginBottom: 10 },
+  // Inline-Player
+  // aspectRatio setzt der Player selbst, sobald das Video seine Masse meldet.
+  // maxWidth ist noetig, weil die Trainer-App im Web als Vollbild laeuft: ohne
+  // Deckel wuerde ein Querformat-Video auf einem breiten Monitor ueber 1000 px
+  // hoch und man muesste zum Abspielen scrollen.
+  player: { width: '100%', maxWidth: 640, backgroundColor: '#000', borderRadius: 10, marginBottom: 10 },
+  playerBox: { backgroundColor: '#fff', borderRadius: 10, padding: 20, marginBottom: 10, alignItems: 'center', gap: 10 },
 
   // Bottom Nav
   bottomNav: {
