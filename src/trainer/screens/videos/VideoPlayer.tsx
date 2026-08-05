@@ -83,6 +83,11 @@ export function VideoPlayer({ video, onFallbackOpen }: Props) {
       // Das Seitenverhaeltnis kommt vom Video selbst — fest verdrahtete 16:9
       // gaeben jedem Hochkant-Video vom Handy dicke schwarze Balken.
       style={[styles.player, { aspectRatio: aspect }]}
+      // expo-av gibt `style` an einen aeusseren View und nur `videoStyle` an
+      // das eigentliche Element. Im Web hebt ExponentVideo dessen
+      // position: absolute wieder auf — ohne diese Masse rendert das <video>
+      // in Eigengroesse oben links und der Container bleibt schwarz drumherum.
+      videoStyle={{ width: '100%', height: '100%' }}
       useNativeControls
       resizeMode={ResizeMode.CONTAIN}
       onReadyForDisplay={e => {

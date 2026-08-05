@@ -114,7 +114,10 @@ export const styles = StyleSheet.create({
   packageDetailTime: { fontSize: 14, fontWeight: '700', color: '#4A7FD4', marginBottom: 10 },
   // Inline-Player
   // aspectRatio setzt der Player selbst, sobald das Video seine Masse meldet.
-  player: { width: '100%', backgroundColor: '#000', borderRadius: 10, marginBottom: 10 },
+  // maxWidth ist noetig, weil die Trainer-App im Web als Vollbild laeuft: ohne
+  // Deckel wuerde ein Querformat-Video auf einem breiten Monitor ueber 1000 px
+  // hoch und man muesste zum Abspielen scrollen.
+  player: { width: '100%', maxWidth: 640, backgroundColor: '#000', borderRadius: 10, marginBottom: 10 },
   playerBox: { backgroundColor: '#fff', borderRadius: 10, padding: 20, marginBottom: 10, alignItems: 'center', gap: 10 },
 
   // Bottom Nav
