@@ -42,6 +42,11 @@ export function VideosTab({ packages }: { packages: TrainerVideoPackage[] }) {
               {p.videos.length} {p.videos.length === 1 ? 'Video' : 'Videos'} · {fmtDateShort(p.created_at.slice(0, 10))}
             </Text>
           </View>
+          {p.scheduledTime && (
+            <View style={styles.timeBadge}>
+              <Text style={styles.timeBadgeText}>{p.scheduledTime} Uhr</Text>
+            </View>
+          )}
           <Text style={styles.packageChevron}>›</Text>
         </TouchableOpacity>
       ))}

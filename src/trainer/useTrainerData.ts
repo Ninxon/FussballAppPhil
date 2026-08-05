@@ -36,7 +36,8 @@ export function useTrainerData() {
         supabase.from('video_packages')
           .select(`
             id, title, description, created_at,
-            video_package_items ( position, videos ( id, title, description, url, storage_path, size_bytes ) )
+            video_package_items ( position, videos ( id, title, description, url, storage_path, size_bytes ) ),
+            video_package_trainers ( scheduled_time )
           `)
           .order('created_at', { ascending: false }),
       ]);
@@ -56,6 +57,10 @@ export function useTrainerData() {
         title: p.title,
         description: p.description,
         created_at: p.created_at,
+        // RLS liefert hier hoechstens die EIGENE Zuweisungszeile — und genau
+        // eine, denn (package_id, trainer_id) ist der Primaerschluessel. Das
+        // Paket ist ueberhaupt nur sichtbar, weil diese Zeile existiert.
+        scheduledTime: (p.video_package_trainers ?? [])[0]?.scheduled_time?.slice(0, 5) ?? null,
         videos: (p.video_package_items ?? [])
           .slice()
           .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))

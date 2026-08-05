@@ -43,6 +43,11 @@ export type TrainerVideoPackage = {
   title: string;
   description: string | null;
   created_at: string;
+  /**
+   * 'HH:MM' oder null. Haengt an der eigenen Zuweisung, nicht am Paket —
+   * ein anderer Trainer kann dasselbe Paket zu einer anderen Zeit haben.
+   */
+  scheduledTime: string | null;
   videos: TrainerVideo[];
 };
 

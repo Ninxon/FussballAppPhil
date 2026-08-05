@@ -31,6 +31,7 @@ export function PackageDetailTab({ pkg, onBack }: Props) {
       </TouchableOpacity>
 
       <Text style={styles.packageDetailTitle}>{pkg.title}</Text>
+      {pkg.scheduledTime && <Text style={styles.packageDetailTime}>Beginn: {pkg.scheduledTime} Uhr</Text>}
       {pkg.description ? <Text style={styles.packageDetailDesc}>{pkg.description}</Text> : null}
       <Text style={styles.sectionTitle}>
         {pkg.videos.length} {pkg.videos.length === 1 ? 'Video' : 'Videos'}

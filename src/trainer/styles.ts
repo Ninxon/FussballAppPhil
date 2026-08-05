@@ -108,6 +108,10 @@ export const styles = StyleSheet.create({
   backLink: { fontSize: 14, fontWeight: '700', color: '#4A7FD4' },
   packageDetailTitle: { fontSize: 20, fontWeight: '800', color: '#111827', marginBottom: 6 },
   packageDetailDesc: { fontSize: 14, color: '#6B7280', lineHeight: 20, marginBottom: 14 },
+  // Uhrzeit der Einheit — als Badge, damit sie nicht in der grauen Metazeile untergeht.
+  timeBadge: { backgroundColor: 'rgba(74,127,212,0.1)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, flexShrink: 0 },
+  timeBadgeText: { fontSize: 13, fontWeight: '700', color: '#4A7FD4' },
+  packageDetailTime: { fontSize: 14, fontWeight: '700', color: '#4A7FD4', marginBottom: 10 },
 
   // Bottom Nav
   bottomNav: {
