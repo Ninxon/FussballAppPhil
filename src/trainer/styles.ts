@@ -112,6 +112,9 @@ export const styles = StyleSheet.create({
   timeBadge: { backgroundColor: 'rgba(74,127,212,0.1)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, flexShrink: 0 },
   timeBadgeText: { fontSize: 13, fontWeight: '700', color: '#4A7FD4' },
   packageDetailTime: { fontSize: 14, fontWeight: '700', color: '#4A7FD4', marginBottom: 10 },
+  // Inline-Player
+  player: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000', borderRadius: 10, marginBottom: 10 },
+  playerBox: { backgroundColor: '#fff', borderRadius: 10, padding: 20, marginBottom: 10, alignItems: 'center', gap: 10 },
 
   // Bottom Nav
   bottomNav: {
