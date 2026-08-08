@@ -2,6 +2,12 @@ node_modules/
 .expo/
 dist/
 web-build/
+
+# Native Projekte werden aus app.json generiert (Prebuild/CNG) und nicht
+# eingecheckt. Liegen sie im Repo, ignoriert der Build die Konfiguration aus
+# app.json — Icon, Splash, Plugins und Version liefen dann auseinander.
+/android/
+/ios/
 *.jks
 *.p8
 *.p12

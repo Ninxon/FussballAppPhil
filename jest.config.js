@@ -17,30 +17,18 @@ module.exports = {
       moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
     },
     // React Native / Hook-Tests
-    // Deliberately NOT using jest-expo preset because jest-expo/src/preset/setup.js
-    // calls Object.defineProperty(NativeModules, ...) which crashes on Node ≥24
-    // (NativeModules.default is null outside a native bridge).
+    // Laeuft ueber das jest-expo-Preset: React Native bringt seit 0.86 kein
+    // eigenes jest/-Verzeichnis mehr mit, die frueher hier direkt eingebundene
+    // react-native/jest/setup.js existiert also nicht mehr. Das Preset liefert
+    // Environment, Haste-Konfiguration und die Native-Mocks.
     {
       displayName: 'integration',
-      testEnvironment: require.resolve('react-native/jest/react-native-env.js'),
+      preset: 'jest-expo/ios',
       testMatch: ['<rootDir>/src/__tests__/**/*.integration.test.ts?(x)'],
-      transform: {
-        '^.+\\.[jt]sx?$': ['babel-jest', { configFile: './babel.config.js' }],
-      },
-      transformIgnorePatterns: [
-        'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|react-navigation|@react-navigation/.*|@supabase)',
-      ],
-      setupFiles: [
-        require.resolve('react-native/jest/setup.js'),
-        './jest.setup.ts',
-      ],
+      // Wird an die setupFiles des Presets angehaengt, ersetzt sie nicht.
+      setupFiles: ['./jest.setup.ts'],
       setupFilesAfterEnv: ['@testing-library/jest-native/extend-expect'],
-      moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
       moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
-      haste: {
-        defaultPlatform: 'ios',
-        platforms: ['android', 'ios', 'native'],
-      },
     },
   ],
   collectCoverageFrom: [

@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { PROGRAMS } from '../constants/programs';
 import { Appointment } from '../types';
@@ -49,11 +49,14 @@ export async function exportToCalendar(appt: Appointment) {
     // @ts-ignore
     URL.revokeObjectURL(url);
   } else {
-    const fileUri = `${FileSystem.cacheDirectory}pk-termin.ics`;
-    await FileSystem.writeAsStringAsync(fileUri, ics, {
-      encoding: FileSystem.EncodingType.UTF8,
-    });
-    await Sharing.shareAsync(fileUri, {
+    // Neue expo-file-system-API (ab SDK 54): create/write sind synchron, die
+    // alten *Async-Funktionen liegen nur noch unter 'expo-file-system/legacy'.
+    // `overwrite`, weil beim zweiten Export sonst die vorherige Datei im Weg ist.
+    const file = new File(Paths.cache, 'pk-termin.ics');
+    file.create({ overwrite: true });
+    file.write(ics);
+
+    await Sharing.shareAsync(file.uri, {
       mimeType: 'text/calendar',
       dialogTitle: 'Termin in Kalender eintragen',
       UTI: 'public.calendar-event',
