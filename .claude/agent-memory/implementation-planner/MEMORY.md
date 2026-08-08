@@ -1,0 +1,1 @@
+- [KI-Chatbot Plan](project_chatbot_plan.md) — Geplant 2026-05-20: FloatingChat, Edge Function chat-assistant, Haiku, neue Dateien unter src/components/chat/ und src/hooks/useChatbot.ts
