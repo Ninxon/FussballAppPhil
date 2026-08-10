@@ -177,7 +177,9 @@ BEGIN
     ELSE NULL
   END;
 
-  v_trainer_id := public.find_available_trainer(p_date, p_time, p_program, p_location);
+  -- p_player_id: der Inhaber eines Stammplatzes wird von seiner eigenen
+  -- Reservierung nicht ausgesperrt.
+  v_trainer_id := public.find_available_trainer(p_date, p_time, p_program, p_location, p_player_id);
 
   IF v_trainer_id IS NULL THEN
     RETURN json_build_object('error', 'Für diesen Zeitpunkt ist kein Trainer verfügbar.');
@@ -354,6 +356,7 @@ DECLARE
   max_capacity     INTEGER;
   base_capacity    INTEGER;
   trainer_count    INTEGER;
+  reserved_count   INTEGER := 0;
   needed_specialty TEXT;
   appt_dow         INTEGER;
 BEGIN
@@ -395,7 +398,30 @@ BEGIN
     trainer_count := 1;
   END IF;
 
-  max_capacity := base_capacity * trainer_count;
+  -- Stammplätze anderer Spieler nehmen Trainer aus dem Angebot — aber nur,
+  -- solange sie an DIESEM Datum noch offen sind. Hat der Inhaber zu der Zeit
+  -- bereits gebucht, zählt sein Termin unten in existing_count; ihn hier noch
+  -- einmal abzuziehen würde den Slot doppelt verengen.
+  -- Der Admin ist bewusst ausgenommen: er darf mit Warnhinweis drüberbuchen.
+  IF NOT public.is_admin() THEN
+    SELECT COUNT(*) INTO reserved_count
+      FROM public.slot_reservations r
+     WHERE r.day_of_week = appt_dow
+       AND r."time"      = NEW.time
+       AND (NEW.location IS NULL OR r.location = NEW.location)
+       AND (CASE r.program WHEN 'torhueter_individual' THEN 'torwart' ELSE 'spieler' END) = needed_specialty
+       AND r.player_id  IS DISTINCT FROM NEW.player_id
+       AND NOT EXISTS (
+         SELECT 1 FROM public.appointments a
+          WHERE a.player_id = r.player_id
+            AND a.date      = NEW.date
+            AND a."time"    = NEW.time
+            AND a.status    = 'confirmed'
+            AND a.id       != NEW.id
+       );
+  END IF;
+
+  max_capacity := base_capacity * GREATEST(trainer_count - reserved_count, 0);
 
   SELECT COUNT(*) INTO existing_count
     FROM public.appointments
@@ -407,6 +433,11 @@ BEGIN
      AND location IS NOT DISTINCT FROM NEW.location;
 
   IF existing_count >= max_capacity THEN
+    -- Eigene Meldung, wenn erst die Reservierung den Slot dichtgemacht hat:
+    -- "ausgebucht" wäre bei einem sichtbar leeren Slot nicht nachvollziehbar.
+    IF reserved_count > 0 AND existing_count < base_capacity * trainer_count THEN
+      RAISE EXCEPTION 'Dieser Slot ist als fester Trainingsplatz für einen anderen Spieler reserviert.';
+    END IF;
     RAISE EXCEPTION 'Dieser Slot ist bereits ausgebucht.';
   END IF;
 
@@ -416,6 +447,52 @@ $$;
 
 
 ALTER FUNCTION "public"."check_slot_capacity"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."check_slot_reservation_capacity"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  needed_specialty TEXT;
+  trainer_count    INTEGER;
+  reserved_count   INTEGER;
+BEGIN
+  needed_specialty := CASE NEW.program
+    WHEN 'torhueter_individual' THEN 'torwart'
+    ELSE 'spieler'
+  END;
+
+  SELECT COUNT(DISTINCT ts.trainer_id) INTO trainer_count
+    FROM public.trainer_schedules ts
+    JOIN public.profiles p ON p.id = ts.trainer_id AND p.role = 'trainer'
+   WHERE p.trainer_specialty = needed_specialty
+     AND ts.day_of_week      = NEW.day_of_week
+     AND ts."time"           = NEW."time"
+     AND ts.location         = NEW.location;
+
+  IF trainer_count = 0 THEN
+    RAISE EXCEPTION 'An diesem Standort ist zu dieser Zeit kein passender Trainer eingeplant.';
+  END IF;
+
+  SELECT COUNT(*) INTO reserved_count
+    FROM public.slot_reservations r
+   WHERE r.day_of_week = NEW.day_of_week
+     AND r."time"      = NEW."time"
+     AND r.location    = NEW.location
+     AND r.id         != NEW.id
+     AND (CASE r.program WHEN 'torhueter_individual' THEN 'torwart' ELSE 'spieler' END) = needed_specialty;
+
+  IF reserved_count >= trainer_count THEN
+    RAISE EXCEPTION 'Für diesen Slot sind bereits alle Trainerplätze reserviert.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."check_slot_reservation_capacity"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."find_available_trainer"("p_date" "date", "p_time" time without time zone, "p_program" "text") RETURNS "uuid"
@@ -433,58 +510,96 @@ CREATE OR REPLACE FUNCTION "public"."find_available_trainer"("p_date" "date", "p
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
-  SELECT ts.trainer_id
-  FROM public.trainer_schedules ts
-  JOIN public.profiles p ON p.id = ts.trainer_id
-  WHERE p.role = 'trainer'
-    AND p.trainer_specialty = CASE p_program
-      WHEN 'torhueter_individual' THEN 'torwart'
-      WHEN 'torhueter_gruppe'     THEN 'torwart'
-      ELSE 'spieler'
-    END
-    AND ts.day_of_week = EXTRACT(ISODOW FROM p_date)::int
-    AND ts."time"      = p_time
-    AND (p_location IS NULL OR ts.location = p_location)
-    AND CASE
-      WHEN p_program IN ('individual', 'torhueter_individual') THEN
-        NOT EXISTS (
-          SELECT 1 FROM public.appointments a
-          WHERE a.trainer_id = ts.trainer_id
-            AND a.date       = p_date
-            AND a."time"     = p_time
-            AND a.status     = 'confirmed'
-        )
-      ELSE
-        (
-          SELECT COUNT(*) FROM public.appointments a
-          WHERE a.trainer_id = ts.trainer_id
-            AND a.date       = p_date
-            AND a."time"     = p_time
-            AND a.status     = 'confirmed'
-            AND a.program    = p_program
-        ) < 4
-        AND NOT EXISTS (
-          SELECT 1 FROM public.appointments a
-          WHERE a.trainer_id = ts.trainer_id
-            AND a.date       = p_date
-            AND a."time"     = p_time
-            AND a.status     = 'confirmed'
-            AND a.program   != p_program
-        )
-    END
-  ORDER BY (
-    SELECT COUNT(*) FROM public.appointments a
-    WHERE a.trainer_id = ts.trainer_id
-      AND a.date       = p_date
-      AND a."time"     = p_time
-      AND a.status     = 'confirmed'
-      AND a.program    = p_program
-  ) DESC
-  LIMIT 1;
+  SELECT public.find_available_trainer(p_date, p_time, p_program, p_location, NULL::uuid);
 $$;
 
 
 ALTER FUNCTION "public"."find_available_trainer"("p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."find_available_trainer"("p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text", "p_player_id" "uuid") RETURNS "uuid"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  WITH free AS (
+    SELECT ts.trainer_id,
+      (
+        SELECT COUNT(*) FROM public.appointments a
+        WHERE a.trainer_id = ts.trainer_id
+          AND a.date       = p_date
+          AND a."time"     = p_time
+          AND a.status     = 'confirmed'
+          AND a.program    = p_program
+      ) AS load
+    FROM public.trainer_schedules ts
+    JOIN public.profiles p ON p.id = ts.trainer_id
+    WHERE p.role = 'trainer'
+      AND p.trainer_specialty = CASE p_program
+        WHEN 'torhueter_individual' THEN 'torwart'
+        WHEN 'torhueter_gruppe'     THEN 'torwart'
+        ELSE 'spieler'
+      END
+      AND ts.day_of_week = EXTRACT(ISODOW FROM p_date)::int
+      AND ts."time"      = p_time
+      AND (p_location IS NULL OR ts.location = p_location)
+      AND CASE
+        WHEN p_program IN ('individual', 'torhueter_individual') THEN
+          NOT EXISTS (
+            SELECT 1 FROM public.appointments a
+            WHERE a.trainer_id = ts.trainer_id
+              AND a.date       = p_date
+              AND a."time"     = p_time
+              AND a.status     = 'confirmed'
+          )
+        ELSE
+          (
+            SELECT COUNT(*) FROM public.appointments a
+            WHERE a.trainer_id = ts.trainer_id
+              AND a.date       = p_date
+              AND a."time"     = p_time
+              AND a.status     = 'confirmed'
+              AND a.program    = p_program
+          ) < 4
+          AND NOT EXISTS (
+            SELECT 1 FROM public.appointments a
+            WHERE a.trainer_id = ts.trainer_id
+              AND a.date       = p_date
+              AND a."time"     = p_time
+              AND a.status     = 'confirmed'
+              AND a.program   != p_program
+          )
+      END
+  ),
+  reserved AS (
+    SELECT COUNT(*) AS n
+    FROM public.slot_reservations r
+    WHERE r.day_of_week = EXTRACT(ISODOW FROM p_date)::int
+      AND r."time"      = p_time
+      AND (p_location IS NULL OR r.location = p_location)
+      AND (CASE r.program WHEN 'torhueter_individual' THEN 'torwart' ELSE 'spieler' END)
+          = CASE p_program
+              WHEN 'torhueter_individual' THEN 'torwart'
+              WHEN 'torhueter_gruppe'     THEN 'torwart'
+              ELSE 'spieler'
+            END
+      AND (p_player_id IS NULL OR r.player_id <> p_player_id)
+      AND NOT EXISTS (
+        SELECT 1 FROM public.appointments a
+        WHERE a.player_id = r.player_id
+          AND a.date      = p_date
+          AND a."time"    = p_time
+          AND a.status    = 'confirmed'
+      )
+  )
+  SELECT f.trainer_id
+  FROM free f
+  WHERE (SELECT COUNT(*) FROM free) > (SELECT n FROM reserved)
+  ORDER BY f.load DESC
+  LIMIT 1;
+$$;
+
+
+ALTER FUNCTION "public"."find_available_trainer"("p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text", "p_player_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."german_easter"("p_year" integer) RETURNS "date"
@@ -541,8 +656,7 @@ CREATE OR REPLACE FUNCTION "public"."get_slot_players"() RETURNS TABLE("date" "t
     AS $$
   SELECT a.date::text, to_char(a.time, 'HH24:MI'), a.program, a.location, a.session_birth_year, a.session_level, a.created_at
   FROM public.appointments a
-  WHERE a.status = 'confirmed'
-    AND a.session_birth_year IS NOT NULL;
+  WHERE a.status = 'confirmed';
 $$;
 
 
@@ -550,6 +664,50 @@ ALTER FUNCTION "public"."get_slot_players"() OWNER TO "postgres";
 
 
 COMMENT ON FUNCTION "public"."get_slot_players"() IS '@omit';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."get_slot_reservations"() RETURNS TABLE("date" "text", "time" "text", "location" "text", "specialty" "text", "blocked" integer, "mine" integer)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  WITH horizon AS (
+    SELECT generate_series(CURRENT_DATE::timestamp, (CURRENT_DATE + 120)::timestamp, INTERVAL '1 day')::date AS d
+  ),
+  own AS (
+    SELECT id FROM public.players WHERE parent_id = (SELECT auth.uid())
+  ),
+  expanded AS (
+    SELECT h.d AS d,
+           r."time" AS t,
+           r.location AS loc,
+           CASE r.program WHEN 'torhueter_individual' THEN 'torwart' ELSE 'spieler' END AS spec,
+           (r.player_id IN (SELECT id FROM own)) AS is_mine
+    FROM public.slot_reservations r
+    JOIN horizon h ON EXTRACT(ISODOW FROM h.d)::int = r.day_of_week
+    WHERE NOT EXISTS (
+      SELECT 1 FROM public.appointments a
+      WHERE a.player_id = r.player_id
+        AND a.date      = h.d
+        AND a."time"    = r."time"
+        AND a.status    = 'confirmed'
+    )
+  )
+  SELECT d::text,
+         to_char(t, 'HH24:MI'),
+         loc,
+         spec,
+         COUNT(*) FILTER (WHERE NOT is_mine)::int,
+         COUNT(*) FILTER (WHERE is_mine)::int
+  FROM expanded
+  GROUP BY d, t, loc, spec;
+$$;
+
+
+ALTER FUNCTION "public"."get_slot_reservations"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."get_slot_reservations"() IS '@omit';
 
 
 
@@ -857,7 +1015,7 @@ CREATE TABLE IF NOT EXISTS "public"."appointments" (
     "is_makeup" boolean DEFAULT false NOT NULL,
     "makeup_count" integer DEFAULT 0 NOT NULL,
     "reminder_sent_at" timestamp with time zone,
-    "location" "text",
+    "location" "text" NOT NULL,
     "player_id" "uuid" NOT NULL,
     "short_notice_cancel" boolean DEFAULT false NOT NULL,
     CONSTRAINT "appointments_location_chk" CHECK ((("location" IS NULL) OR ("location" = ANY (ARRAY['Rüsselsheim'::"text", 'Kelsterbach'::"text", 'Groß-Gerau'::"text"])))),
@@ -946,6 +1104,7 @@ CREATE TABLE IF NOT EXISTS "public"."players" (
     "player_number" integer,
     "is_active" boolean DEFAULT true NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "individual_billed_since" "date" DEFAULT (("now"() AT TIME ZONE 'Europe/Berlin'::"text"))::"date" NOT NULL,
     CONSTRAINT "players_level_check" CHECK ((("level" IS NULL) OR ("level" = ANY (ARRAY['anfaenger'::"text", 'amateur'::"text", 'profi'::"text", 'experte'::"text"])))),
     CONSTRAINT "players_location_chk" CHECK ((("location" IS NULL) OR ("location" = ANY (ARRAY['Rüsselsheim'::"text", 'Kelsterbach'::"text", 'Groß-Gerau'::"text"])))),
     CONSTRAINT "players_player_type_check" CHECK ((("player_type" IS NULL) OR ("player_type" = ANY (ARRAY['torwart'::"text", 'feldspieler'::"text"]))))
@@ -953,6 +1112,10 @@ CREATE TABLE IF NOT EXISTS "public"."players" (
 
 
 ALTER TABLE "public"."players" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."players"."individual_billed_since" IS 'Stichtag der letzten Einzeltraining-Abrechnung. Einheiten ab diesem Datum zaehlen in den laufenden 4er-Block (individual + torhueter_individual). Merkhilfe fuer den Admin, keine Buchungssperre.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."profiles" (
@@ -985,6 +1148,28 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
 
 
 ALTER TABLE "public"."profiles" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."slot_reservations" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "player_id" "uuid" NOT NULL,
+    "day_of_week" integer NOT NULL,
+    "time" time without time zone NOT NULL,
+    "location" "text" NOT NULL,
+    "program" "text" NOT NULL,
+    "note" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "slot_reservations_day_of_week_check" CHECK ((("day_of_week" >= 1) AND ("day_of_week" <= 5))),
+    CONSTRAINT "slot_reservations_location_check" CHECK (("location" = ANY (ARRAY['Rüsselsheim'::"text", 'Kelsterbach'::"text", 'Groß-Gerau'::"text"]))),
+    CONSTRAINT "slot_reservations_program_check" CHECK (("program" = ANY (ARRAY['individual'::"text", 'torhueter_individual'::"text"])))
+);
+
+
+ALTER TABLE "public"."slot_reservations" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."slot_reservations" IS 'Wiederkehrend freigehaltener Einzeltraining-Slot ("Stammplatz"). Belegt einen Trainerplatz, erzeugt keine Termine.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."trainer_schedules" (
@@ -1131,6 +1316,16 @@ ALTER TABLE ONLY "public"."profiles"
 
 
 
+ALTER TABLE ONLY "public"."slot_reservations"
+    ADD CONSTRAINT "slot_reservations_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."slot_reservations"
+    ADD CONSTRAINT "slot_reservations_player_id_day_of_week_time_key" UNIQUE ("player_id", "day_of_week", "time");
+
+
+
 ALTER TABLE ONLY "public"."trainer_schedules"
     ADD CONSTRAINT "trainer_schedules_pkey" PRIMARY KEY ("id");
 
@@ -1197,6 +1392,14 @@ CREATE INDEX "idx_players_parent_id" ON "public"."players" USING "btree" ("paren
 
 
 
+CREATE INDEX "idx_slot_reservations_player" ON "public"."slot_reservations" USING "btree" ("player_id");
+
+
+
+CREATE INDEX "idx_slot_reservations_slot" ON "public"."slot_reservations" USING "btree" ("day_of_week", "time", "location");
+
+
+
 CREATE INDEX "idx_tokens_player_active" ON "public"."cancellation_tokens" USING "btree" ("player_id", "used_at", "expires_at");
 
 
@@ -1253,6 +1456,10 @@ CREATE OR REPLACE TRIGGER "enforce_slot_capacity" BEFORE INSERT OR UPDATE ON "pu
 
 
 
+CREATE OR REPLACE TRIGGER "enforce_slot_reservation_capacity" BEFORE INSERT OR UPDATE ON "public"."slot_reservations" FOR EACH ROW EXECUTE FUNCTION "public"."check_slot_reservation_capacity"();
+
+
+
 CREATE OR REPLACE TRIGGER "guard_profile_self_update" BEFORE UPDATE ON "public"."profiles" FOR EACH ROW EXECUTE FUNCTION "public"."guard_profile_self_update"();
 
 
@@ -1297,6 +1504,11 @@ ALTER TABLE ONLY "public"."players"
 
 ALTER TABLE ONLY "public"."profiles"
     ADD CONSTRAINT "profiles_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."slot_reservations"
+    ADD CONSTRAINT "slot_reservations_player_id_fkey" FOREIGN KEY ("player_id") REFERENCES "public"."players"("id") ON DELETE CASCADE;
 
 
 
@@ -1435,6 +1647,13 @@ CREATE POLICY "profiles_select" ON "public"."profiles" FOR SELECT TO "authentica
 
 
 CREATE POLICY "profiles_update" ON "public"."profiles" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_admin"() AS "is_admin") OR (( SELECT "auth"."uid"() AS "uid") = "id"))) WITH CHECK ((( SELECT "public"."is_admin"() AS "is_admin") OR (( SELECT "auth"."uid"() AS "uid") = "id")));
+
+
+
+ALTER TABLE "public"."slot_reservations" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "sr_admin_all" ON "public"."slot_reservations" TO "authenticated" USING ("public"."is_admin"()) WITH CHECK ("public"."is_admin"());
 
 
 
@@ -1755,6 +1974,12 @@ GRANT ALL ON FUNCTION "public"."check_slot_capacity"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."check_slot_reservation_capacity"() TO "anon";
+GRANT ALL ON FUNCTION "public"."check_slot_reservation_capacity"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."check_slot_reservation_capacity"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."find_available_trainer"("p_date" "date", "p_time" time without time zone, "p_program" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."find_available_trainer"("p_date" "date", "p_time" time without time zone, "p_program" "text") TO "service_role";
 
@@ -1763,6 +1988,11 @@ GRANT ALL ON FUNCTION "public"."find_available_trainer"("p_date" "date", "p_time
 REVOKE ALL ON FUNCTION "public"."find_available_trainer"("p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."find_available_trainer"("p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."find_available_trainer"("p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."find_available_trainer"("p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text", "p_player_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."find_available_trainer"("p_date" "date", "p_time" time without time zone, "p_program" "text", "p_location" "text", "p_player_id" "uuid") TO "service_role";
 
 
 
@@ -1781,6 +2011,12 @@ GRANT ALL ON FUNCTION "public"."get_slot_counts"() TO "service_role";
 REVOKE ALL ON FUNCTION "public"."get_slot_players"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."get_slot_players"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_slot_players"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."get_slot_reservations"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_slot_reservations"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_slot_reservations"() TO "service_role";
 
 
 
@@ -1903,6 +2139,12 @@ GRANT ALL ON TABLE "public"."players" TO "service_role";
 GRANT ALL ON TABLE "public"."profiles" TO "anon";
 GRANT ALL ON TABLE "public"."profiles" TO "authenticated";
 GRANT ALL ON TABLE "public"."profiles" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."slot_reservations" TO "anon";
+GRANT ALL ON TABLE "public"."slot_reservations" TO "authenticated";
+GRANT ALL ON TABLE "public"."slot_reservations" TO "service_role";
 
 
 
