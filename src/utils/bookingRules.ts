@@ -110,12 +110,22 @@ export function isBlockedByPeriod(dateStr: string, periods: BlockedPeriod[]): bo
  * playerBirthYear/Level = prüfender Spieler, existingBirthYear/Level = bestehender Spieler.
  */
 export function checkGroupSessionCompatibility(
-  playerBirthYear: number,
-  playerLevel: PlayerLevel,
-  existingBirthYear: number,
-  existingLevel: PlayerLevel,
+  playerBirthYear: number | null,
+  playerLevel: PlayerLevel | null,
+  existingBirthYear: number | null,
+  existingLevel: PlayerLevel | null,
   sessionYear: number,
 ): { allowed: boolean; reason?: string } {
+  // Unvollständige Angaben sind KEIN Freifahrtschein: wer sich nicht prüfen
+  // lässt, gilt als inkompatibel. Vorher wurden solche Spieler stillschweigend
+  // übersprungen — die Gruppe wirkte leer und nahm jeden auf.
+  if (playerBirthYear == null || playerLevel == null) {
+    return { allowed: false, reason: 'Jahrgang oder Stufe des Spielers fehlt — Gruppenprüfung nicht möglich.' };
+  }
+  if (existingBirthYear == null || existingLevel == null) {
+    return { allowed: false, reason: 'Ein Spieler im Slot hat keine Jahrgangs-/Stufenangabe.' };
+  }
+
   const playerAge = sessionYear - playerBirthYear;
   const existingAge = sessionYear - existingBirthYear;
 
@@ -171,8 +181,8 @@ export function checkGroupSessionCompatibility(
  * Prüft ob ein neuer Spieler mit ALLEN bestehenden Spielern im Slot kompatibel ist (bidirektional).
  */
 export function canJoinGroupSlot(
-  newPlayer: { birthYear: number; level: PlayerLevel },
-  existingPlayers: Array<{ birthYear: number; level: PlayerLevel }>,
+  newPlayer: { birthYear: number | null; level: PlayerLevel | null },
+  existingPlayers: Array<{ birthYear: number | null; level: PlayerLevel | null }>,
   sessionYear: number,
 ): { allowed: boolean; reason?: string } {
   for (const existing of existingPlayers) {
@@ -198,14 +208,14 @@ export function canJoinGroupSlot(
  * Jede Buchung wird der ersten kompatiblen Gruppe zugewiesen, die noch Platz hat.
  */
 export function reconstructGroups(
-  bookings: Array<{ birthYear: number; level: PlayerLevel; created_at?: string }>,
+  bookings: Array<{ birthYear: number | null; level: PlayerLevel | null; created_at?: string }>,
   groupSize: number,
   sessionYear: number,
-): Array<Array<{ birthYear: number; level: PlayerLevel }>> {
+): Array<Array<{ birthYear: number | null; level: PlayerLevel | null }>> {
   const sorted = [...bookings].sort((a, b) =>
     (a.created_at ?? '').localeCompare(b.created_at ?? ''),
   );
-  const groups: Array<Array<{ birthYear: number; level: PlayerLevel }>> = [];
+  const groups: Array<Array<{ birthYear: number | null; level: PlayerLevel | null }>> = [];
   for (const booking of sorted) {
     let assigned = false;
     for (const group of groups) {

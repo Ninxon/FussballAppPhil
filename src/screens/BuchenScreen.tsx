@@ -168,12 +168,26 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
 
     let freeInGroup = GROUP_SIZE;
     let groupUnavailable = false;
-    if (isGroup && playerBirthYear && playerLevel) {
+    if (isGroup && !(playerBirthYear && playerLevel)) {
+      // Ohne Jahrgang/Level ist die Gruppenregel nicht prüfbar. Früher lief die
+      // Prüfung dann gar nicht und JEDER Slot galt als frei — ein Spieler ohne
+      // Level konnte sich so in jede Gruppe buchen. Nicht prüfbar = nicht buchbar.
+      groupUnavailable = true;
+    } else if (isGroup) {
       const existingPlayers = slotPlayers
-        .filter(p => p.date === selDate && p.time === time && p.program === selProgram &&
-          (p.location ?? null) === (location ?? null))
-        .filter(p => p.session_birth_year != null && p.session_level)
-        .map(p => ({ birthYear: p.session_birth_year!, level: p.session_level as any, created_at: p.created_at }));
+        .filter(p => p.date === selDate && p.time === time && p.program === selProgram)
+        // Standort trennt Trainer, nicht Gruppen: ein Termin OHNE Standort kann
+        // an jedem Standort sitzen und muss überall mitzählen. Ihn wegzufiltern
+        // liess Gruppen leerer wirken als sie sind (Ursache der Fehlbuchungen).
+        .filter(p => p.location == null || (p.location ?? null) === (location ?? null))
+        // Fehlender Snapshot blockiert die Gruppe, statt sie zu öffnen: ein
+        // unbekannter Mitspieler ist mit niemandem nachweislich kompatibel
+        // (canJoinGroupSlot lehnt null ab).
+        .map(p => ({
+          birthYear: p.session_birth_year ?? null,
+          level: (p.session_level ?? null) as any,
+          created_at: p.created_at,
+        }));
       const groups = reconstructGroups(existingPlayers, GROUP_SIZE, sessionYear);
       const trainerCount = Math.max(1, Math.round(totalCapacity / GROUP_SIZE));
 

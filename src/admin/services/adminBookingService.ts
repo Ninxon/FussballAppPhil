@@ -40,8 +40,12 @@ export async function insertBooking(ctx: BookingContext, req: BookingRequest) {
   return AppointmentService.insert({
     player_id: req.playerId, date: req.date, time: req.time, status: 'confirmed', program: req.program,
     ...(req.trainerId ? { trainer_id: req.trainerId } : {}),
-    ...(birthYear ? { session_birth_year: birthYear } : {}),
-    ...(level ? { session_level: level } : {}),
+    // Immer schreiben, auch als null: ein fehlendes Feld wurde früher gar nicht
+    // erst gesetzt, und solche Termine waren dann für jede Gruppenprüfung
+    // unsichtbar. Der Snapshot ist der Prüfwert — er darf nicht stillschweigend
+    // entfallen, nur weil das Profil unvollständig ist.
+    session_birth_year: birthYear,
+    session_level: level,
     ...(slotLocation ? { location: slotLocation } : {}),
   });
 }

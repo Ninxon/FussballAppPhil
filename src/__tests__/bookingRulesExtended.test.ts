@@ -246,6 +246,26 @@ describe('canJoinGroupSlot', () => {
     expect(canJoinGroupSlot(player(2011, 'profi'), existing, SESSION_YEAR).allowed).toBe(true);
   });
 
+  // Regression: der reale Vorfall vom 21.08.2026 — ein Experte (2014) und ein
+  // Amateur (2019) landeten in derselben Gruppe, weil Mitspieler ohne
+  // Jahrgangs-/Stufen-Snapshot aus der Prüfung herausgefiltert wurden und die
+  // Gruppe dadurch leer wirkte. Unvollständige Angaben müssen blockieren.
+  test('Mitspieler ohne Snapshot blockiert die Gruppe (statt sie zu öffnen)', () => {
+    const existing = [{ birthYear: null, level: null }];
+    const result = canJoinGroupSlot(player(2014, 'experte'), existing, SESSION_YEAR);
+    expect(result.allowed).toBe(false);
+  });
+
+  test('Spieler ohne eigenes Level darf nicht in eine Gruppe', () => {
+    const existing = [player(2019, 'amateur')];
+    expect(canJoinGroupSlot({ birthYear: 2014, level: null }, existing, SESSION_YEAR).allowed).toBe(false);
+  });
+
+  test('Experte 2014 und Amateur 2019 bleiben unvereinbar', () => {
+    expect(canJoinGroupSlot(player(2014, 'experte'), [player(2019, 'amateur')], SESSION_YEAR).allowed).toBe(false);
+    expect(canJoinGroupSlot(player(2019, 'amateur'), [player(2014, 'experte')], SESSION_YEAR).allowed).toBe(false);
+  });
+
   test('inkompatibler Spieler → blockiert', () => {
     const existing = [player(2010, 'experte')];
     const result = canJoinGroupSlot(player(2010, 'anfaenger'), existing, SESSION_YEAR);

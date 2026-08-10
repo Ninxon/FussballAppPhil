@@ -79,7 +79,10 @@ export function validateBookingRules(ctx: BookingContext, req: BookingRequest, n
   // Buchung (skipGroupCompat) durch den Admin übergangen werden. Nur DIESER
   // Check entfällt dann — Kapazität, Tageslimit etc. bleiben aktiv.
   const exemptCompat = skipGroupCompat || customer?.skip_group_age_level_check === true;
-  if (PROGRAM_CATEGORY[program as ProgramId] === 'gruppe' && birthYear && level && !exemptCompat) {
+  // Kein "&& birthYear && level" mehr: fehlten die Angaben, entfiel die Prüfung
+  // komplett und der Spieler passte überall hinein. Jetzt lehnt canJoinGroupSlot
+  // ab — bewusst übergehen kann der Admin weiterhin per skip_group_age_level_check.
+  if (PROGRAM_CATEGORY[program as ProgramId] === 'gruppe' && !exemptCompat) {
     // Ein Trainer = eine Gruppe (Kapazität 4, ein Programm pro Trainer/Slot).
     // Daher nur gegen die Spieler DESSELBEN Trainers auf Kompatibilität prüfen —
     // sonst blockiert die erste Gruppe fälschlich jede weitere Gruppe (anderer
@@ -88,9 +91,13 @@ export function validateBookingRules(ctx: BookingContext, req: BookingRequest, n
       a => a.date === date && a.time === time && a.program === program && a.status === 'confirmed'
         && (trainerId ? a.trainer_id === trainerId : true),
     );
+    // Termine ohne Snapshot werden NICHT mehr weggefiltert — sie blockieren die
+    // Gruppe, statt unsichtbar zu sein und sie fälschlich frei erscheinen zu lassen.
     const existingPlayers = slotAppts
-      .filter(a => a.session_birth_year != null && a.session_level)
-      .map(a => ({ birthYear: a.session_birth_year!, level: a.session_level as PlayerLevel }));
+      .map(a => ({
+        birthYear: a.session_birth_year ?? null,
+        level: (a.session_level ?? null) as PlayerLevel | null,
+      }));
     if (existingPlayers.length > 0) {
       const check = canJoinGroupSlot({ birthYear, level }, existingPlayers, parseInt(date.slice(0, 4)));
       if (!check.allowed) return check.reason ?? 'Gruppe nicht kompatibel.';
