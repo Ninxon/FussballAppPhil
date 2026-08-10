@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput, Switch } from 'react-native';
-import { CustomerProfile, AdminAppointment, TrainerProfile, MutationResult } from '../../hooks/useAdminData';
+import { CustomerProfile, AdminAppointment, TrainerProfile, MutationResult, BookingMutationResult } from '../../hooks/useAdminData';
 import { PROGRAMS, PROGRAM_CATEGORY, ProgramId } from '../../../constants/programs';
 import { SLOTS } from '../../../constants/slots';
 import { fmtDate } from '../../../utils/date';
@@ -17,8 +17,8 @@ interface Props {
   /** Bestätigte Termine des Kunden — für das Tageslimit im Formular. */
   appointments: AdminAppointment[];
   onCancelAppointment: (id: string, reason?: string) => Promise<MutationResult>;
-  onAddAppointment: (userId: string, date: string, time: string, program: string, trainerId?: string | null, skipGroupCompat?: boolean) => Promise<MutationResult>;
-  onAddRecurring: (userId: string, dates: string[], time: string, program: string, trainerId?: string | null, skipGroupCompat?: boolean) => Promise<{ error: string | null; conflicts: { date: string; reason: string }[]; created: number }>;
+  onAddAppointment: (userId: string, date: string, time: string, program: string, trainerId?: string | null, skipGroupCompat?: boolean, skipReservation?: boolean) => Promise<BookingMutationResult>;
+  onAddRecurring: (userId: string, dates: string[], time: string, program: string, trainerId?: string | null, skipGroupCompat?: boolean, skipReservation?: boolean) => Promise<{ error: string | null; conflicts: { date: string; reason: string }[]; created: number; reservationConflict?: boolean }>;
 }
 
 // Termin-Karte: Einzel- und Serienbuchung sowie die Terminlisten.
@@ -35,6 +35,10 @@ export function AppointmentsSection({
   const [bookingError, setBookingError] = useState<string | null>(null);
   // Einmalige Befreiung von der Alters-/Level-Prüfung nur für diese Buchung.
   const [bookSkipCompat, setBookSkipCompat] = useState(false);
+  // Fremder Stammplatz: erst nach dem Versuch sichtbar, damit der Schalter nicht
+  // dauerhaft im Formular steht und zum gedankenlosen Umlegen einlädt.
+  const [reservationBlocked, setReservationBlocked] = useState(false);
+  const [bookSkipReservation, setBookSkipReservation] = useState(false);
 
   const [bookRecurring, setBookRecurring] = useState(false);
   const [recInterval, setRecInterval] = useState<RecurrenceInterval>('weekly');
@@ -74,23 +78,28 @@ export function AppointmentsSection({
       }
       if (seriesDates.length === 0) { setBookingError('Keine Termine im gewählten Zeitraum.'); return; }
       setBookingLoading(true);
-      const { error, conflicts, created } = await onAddRecurring(customer.id, seriesDates, bookTime, bookProgram, bookTrainerId, bookSkipCompat);
+      const { error, conflicts, created, reservationConflict } = await onAddRecurring(customer.id, seriesDates, bookTime, bookProgram, bookTrainerId, bookSkipCompat, bookSkipReservation);
       setBookingLoading(false);
       if (error) { setBookingError(error); return; }
-      if (conflicts.length > 0) { setRecResult({ created: 0, conflicts }); return; }
+      if (conflicts.length > 0) { setReservationBlocked(!!reservationConflict); setRecResult({ created: 0, conflicts }); return; }
       setRecResult({ created, conflicts: [] });
       setShowBooking(false); setBookDate(''); setBookingError(null);
       setBookTrainerId(trainers[0]?.id ?? null); setBookRecurring(false); setBookSkipCompat(false);
+      setReservationBlocked(false); setBookSkipReservation(false);
       return;
     }
 
     const confirmedOnDay = appointments.filter(a => a.date === bookDate && a.status === 'confirmed');
     if (confirmedOnDay.length >= 2) { setBookingError('Bereits zwei Termine an diesem Tag.'); return; }
     setBookingLoading(true);
-    const { error } = await onAddAppointment(customer.id, bookDate, bookTime, bookProgram, bookTrainerId, bookSkipCompat);
+    const { error, reservationConflict } = await onAddAppointment(customer.id, bookDate, bookTime, bookProgram, bookTrainerId, bookSkipCompat, bookSkipReservation);
     setBookingLoading(false);
-    if (error) setBookingError(error);
-    else { setShowBooking(false); setBookDate(''); setBookingError(null); setBookTrainerId(trainers[0]?.id ?? null); setBookSkipCompat(false); }
+    if (error) { setBookingError(error); setReservationBlocked(!!reservationConflict); }
+    else {
+      setShowBooking(false); setBookDate(''); setBookingError(null);
+      setBookTrainerId(trainers[0]?.id ?? null); setBookSkipCompat(false);
+      setReservationBlocked(false); setBookSkipReservation(false);
+    }
   };
 
   return (
@@ -245,6 +254,27 @@ export function AppointmentsSection({
           )}
 
           {bookingError && <Text style={styles.fieldError}>{bookingError}</Text>}
+
+          {/* Fester Trainingsplatz eines anderen Kindes: kein harter Fehler,
+              sondern eine bewusste Entscheidung des Admins. */}
+          {reservationBlocked && (
+            <View style={styles.exemptBox}>
+              <View style={styles.exemptRow}>
+                <Text style={styles.exemptLabel}>Fremden Stammplatz übergehen</Text>
+                <Switch
+                  value={bookSkipReservation}
+                  onValueChange={setBookSkipReservation}
+                  trackColor={{ false: '#E5E7EB', true: '#F5A84A' }}
+                  thumbColor="#fff"
+                />
+              </View>
+              <Text style={styles.exemptHint}>
+                Der Slot wird für ein anderes Kind freigehalten. Mit diesem Schalter buchst du
+                trotzdem — der andere Spieler verliert dann seinen festen Platz an diesem Tag.
+              </Text>
+            </View>
+          )}
+
           <TouchableOpacity
             style={[styles.saveBtn, (bookingLoading || trainers.length === 0) && { opacity: 0.5 }]}
             onPress={doBook}

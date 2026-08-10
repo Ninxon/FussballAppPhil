@@ -40,8 +40,9 @@ export function AdminApp({ onLogout }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const {
-    customers, allAppointments, trainers, trainerSchedules, trainerMonthlyCounts, activeTokensByCustomer, loading, loadError,
+    customers, allAppointments, trainers, trainerSchedules, slotReservations, trainerMonthlyCounts, activeTokensByCustomer, loading, loadError,
     cancelAppointment, addAppointmentForCustomer, addRecurringAppointments,
+    addSlotReservation, removeSlotReservation,
     createCustomer, deleteCustomer,
     saveCustomerLevel, saveBookingPermissions, saveCustomerProfile, saveGroupCompatExempt,
     saveCustomerEmail, toggleCustomerActive, resetCustomerTokens, grantCustomerToken,
@@ -123,11 +124,15 @@ export function AdminApp({ onLogout }: Props) {
           customer={selectedCustomer}
           appointments={allAppointments.filter(a => a.player_id === selectedCustomer.id)}
           trainers={trainers}
+          trainerSchedules={trainerSchedules}
+          slotReservations={slotReservations}
           tokenCounts={activeTokensByCustomer[selectedCustomer.id]}
           onBack={() => setSelectedCustomerId(null)}
           onCancelAppointment={cancelAppointment}
           onAddAppointment={addAppointmentForCustomer}
           onAddRecurring={addRecurringAppointments}
+          onAddReservation={addSlotReservation}
+          onRemoveReservation={removeSlotReservation}
           onSaveLevel={saveCustomerLevel}
           onSaveBookingPermissions={saveBookingPermissions}
           onSaveGroupExempt={saveGroupCompatExempt}
@@ -159,6 +164,7 @@ export function AdminApp({ onLogout }: Props) {
         <ZeitplanScreen
           trainers={trainers}
           trainerSchedules={trainerSchedules}
+          slotReservations={slotReservations}
           trainerMonthlyCounts={trainerMonthlyCounts}
           onSetSlot={setScheduleSlot}
           onCreateTrainer={createTrainer}

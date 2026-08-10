@@ -12,6 +12,8 @@ export type SlotEntry = { time: string; location: Location | null; capacity: num
 export type SlotAvailability = {
   totalCapacity: number; booked: number; isGroup: boolean;
   freeInGroup: number; groupUnavailable: boolean;
+  /** Dieser Slot ist der eigene Stammplatz — Kennzeichnung statt „Verfügbar". */
+  isMyReservation: boolean;
 };
 
 interface Props {
@@ -86,7 +88,7 @@ export function TimeStep({
       ) : (
         <View style={[styles.slotGrid, { marginBottom: 20 }]}>
           {renderableEntries.map(entry => {
-            const { totalCapacity, booked, freeInGroup } = slotAvailability(entry.time, entry.location);
+            const { totalCapacity, booked, freeInGroup, isMyReservation } = slotAvailability(entry.time, entry.location);
             const userBooked = myAppointments.some(a => a.date === selDate && a.time === entry.time && a.status === 'confirmed');
             const isPast = isToday && entry.time <= nowStr;
 
@@ -97,6 +99,9 @@ export function TimeStep({
               if (isPast) return 'Vergangen';
               if (userBooked) return 'Bereits gebucht';
               if (booked >= totalCapacity) return 'Ausgebucht';
+              // Fester Platz: für den Inhaber der wichtigste Hinweis am Slot —
+              // er sieht sofort, dass diese Zeit für ihn freigehalten wird.
+              if (isMyReservation) return 'Dein fester Platz';
               if (isGroup) return freeInGroup === 1 ? '1 Platz frei' : `${freeInGroup} Plätze frei`;
               return 'Verfügbar';
             })();
@@ -117,7 +122,8 @@ export function TimeStep({
                 )}
                 <Text maxFontSizeMultiplier={1.3} style={[styles.slotSub, full && styles.slotSubDimmed,
                   sel && styles.slotSubSelected,
-                  !full && isGroup && freeInGroup === 1 && { color: '#D97706' }]}>
+                  !full && isGroup && freeInGroup === 1 && { color: '#D97706' },
+                  !full && isMyReservation && { color: C.accent, fontWeight: '700' }]}>
                   {subLabel}
                 </Text>
               </TouchableOpacity>

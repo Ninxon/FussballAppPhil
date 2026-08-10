@@ -1,13 +1,14 @@
 import React from 'react';
 import { ScrollView } from 'react-native';
-import { CustomerProfile, AdminAppointment, TrainerProfile, MutationResult } from '../hooks/useAdminData';
-import { PlayerLevel, BookingPermissions } from '../../types';
+import { CustomerProfile, AdminAppointment, TrainerProfile, MutationResult, BookingMutationResult } from '../hooks/useAdminData';
+import { PlayerLevel, BookingPermissions, SlotReservation, SlotReservationInsert, TrainerSchedule } from '../../types';
 import { todayStr } from '../../utils/date';
 import { CustomerHeader } from './kundenDetail/CustomerHeader';
 import { ContactSection } from './kundenDetail/ContactSection';
 import { LevelSection } from './kundenDetail/LevelSection';
 import { PermissionsSection } from './kundenDetail/PermissionsSection';
 import { IndividualBillingSection } from './kundenDetail/IndividualBillingSection';
+import { StammplatzSection } from './kundenDetail/StammplatzSection';
 import { AppointmentsSection } from './kundenDetail/AppointmentsSection';
 import { styles } from './kundenDetail/styles';
 
@@ -15,11 +16,15 @@ interface Props {
   customer: CustomerProfile;
   appointments: AdminAppointment[];
   trainers: TrainerProfile[];
+  trainerSchedules: TrainerSchedule[];
+  slotReservations: SlotReservation[];
   tokenCounts?: { individual: number; gruppe: number };
   onBack: () => void;
   onCancelAppointment: (id: string, reason?: string) => Promise<MutationResult>;
-  onAddAppointment: (userId: string, date: string, time: string, program: string, trainerId?: string | null, skipGroupCompat?: boolean) => Promise<MutationResult>;
-  onAddRecurring: (userId: string, dates: string[], time: string, program: string, trainerId?: string | null, skipGroupCompat?: boolean) => Promise<{ error: string | null; conflicts: { date: string; reason: string }[]; created: number }>;
+  onAddAppointment: (userId: string, date: string, time: string, program: string, trainerId?: string | null, skipGroupCompat?: boolean, skipReservation?: boolean) => Promise<BookingMutationResult>;
+  onAddRecurring: (userId: string, dates: string[], time: string, program: string, trainerId?: string | null, skipGroupCompat?: boolean, skipReservation?: boolean) => Promise<{ error: string | null; conflicts: { date: string; reason: string }[]; created: number; reservationConflict?: boolean }>;
+  onAddReservation: (row: SlotReservationInsert) => Promise<MutationResult>;
+  onRemoveReservation: (id: string) => Promise<MutationResult>;
   onSaveLevel: (customerId: string, level: PlayerLevel | null) => Promise<MutationResult>;
   onSaveBookingPermissions: (customerId: string, permissions: Partial<BookingPermissions>) => Promise<MutationResult>;
   onSaveGroupExempt: (customerId: string, value: boolean) => Promise<MutationResult>;
@@ -36,8 +41,9 @@ interface Props {
 // haelt ihren eigenen Formular- und Fehlerzustand; hier bleiben nur die aus
 // den Terminen abgeleiteten Listen, die mehrere Sektionen brauchen.
 export function KundenDetailScreen({
-  customer, appointments, trainers, tokenCounts,
+  customer, appointments, trainers, trainerSchedules, slotReservations, tokenCounts,
   onBack, onCancelAppointment, onAddAppointment, onAddRecurring,
+  onAddReservation, onRemoveReservation,
   onSaveLevel, onSaveBookingPermissions, onSaveGroupExempt, onSaveProfile, onSaveEmail,
   onToggleActive, onResetTokens, onGrantToken, onMarkIndividualBilled, onDeleteCustomer,
 }: Props) {
@@ -88,6 +94,15 @@ export function KundenDetailScreen({
         billedSince={customer.individual_billed_since}
         todayStr={ts}
         onMarkIndividualBilled={onMarkIndividualBilled}
+      />
+
+      <StammplatzSection
+        customer={customer}
+        slotReservations={slotReservations}
+        trainers={trainers}
+        trainerSchedules={trainerSchedules}
+        onAddReservation={onAddReservation}
+        onRemoveReservation={onRemoveReservation}
       />
 
       <AppointmentsSection

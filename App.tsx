@@ -96,7 +96,7 @@ function AppInner() {
   const [passwordRecovery, setPasswordRecovery] = useState(isPasswordRecoveryUrl);
   const [tab, setTab] = useState<Tab>('home');
   const { players, activePlayer, activePlayerId, setActivePlayer, loading: playersLoading } = usePlayers();
-  const { slotCounts, slotPlayers, myAppointments, activeTokens, addAppointment, cancelAppointment, refreshSlotData, refetch, loading: apptsLoading } = useAppointments(activePlayer);
+  const { slotCounts, slotPlayers, slotReservations, myAppointments, activeTokens, addAppointment, cancelAppointment, refreshSlotData, refetch, loading: apptsLoading } = useAppointments(activePlayer);
   // Initial-Load der Kundendaten: solange keine leeren Zustände zeigen.
   const dataLoading = playersLoading || apptsLoading;
   const { trainerSchedules, trainers: trainerProfiles } = useTrainerSchedules();
@@ -242,6 +242,7 @@ function AppInner() {
                 key="buchen"
                 slotCounts={slotCounts}
                 slotPlayers={slotPlayers}
+                slotReservations={slotReservations}
                 myAppointments={myAppointments}
                 activeTokens={activeTokens}
                 player={activePlayer}

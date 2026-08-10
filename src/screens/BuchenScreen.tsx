@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { useTheme } from '../contexts/ThemeContext';
-import { Appointment, SlotCount, SlotPlayer, CancellationToken, Tab, TrainerSchedule, Player } from '../types';
+import { Appointment, SlotCount, SlotPlayer, SlotReservationCount, CancellationToken, Tab, TrainerSchedule, Player } from '../types';
 import { todayStr } from '../utils/date';
 import { PROGRAMS, PROGRAM_CATEGORY, ProgramId } from '../constants/programs';
 import { canJoinGroupSlot, reconstructGroups } from '../utils/bookingRules';
@@ -19,6 +19,8 @@ import { DoneStep } from './buchen/DoneStep';
 interface Props {
   slotCounts: SlotCount[];
   slotPlayers: SlotPlayer[];
+  /** Stammplätze: pro Datum/Slot fremdreservierte bzw. eigene Trainerplätze. */
+  slotReservations?: SlotReservationCount[];
   myAppointments: Appointment[];
   player: Player | null;
   activeTokens: CancellationToken[];
@@ -56,7 +58,7 @@ function isProgramAllowed(player: Player, programId: string): boolean {
 
 // Orchestriert den Buchungs-Wizard: hält den Wizard-State und die abgeleiteten
 // Slot-Daten, die eigentlichen Schritte leben in src/screens/buchen/.
-export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, activeTokens, addAppointment, setTab, trainerSchedules = [], trainers = [], refreshSlotData, header, loading = false }: Props) {
+export function BuchenScreen({ slotCounts, slotPlayers, slotReservations = [], myAppointments, player, activeTokens, addAppointment, setTab, trainerSchedules = [], trainers = [], refreshSlotData, header, loading = false }: Props) {
   const insets = useSafeAreaInsets();
   const { C } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
@@ -121,14 +123,14 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
     // Kapazität pro (Uhrzeit, Standort): jede passende Trainer-Zeile zählt
     // +baseCapacity für ihren Standort. location null = noch nicht zugeordnet
     // (Alt-Slot) — erscheint nur unter "Alle Standorte".
-    const byKey = new Map<string, { time: string; location: Location | null; capacity: number }>();
+    const byKey = new Map<string, { time: string; location: Location | null; capacity: number; trainerCount: number }>();
     for (const s of trainerSchedules) {
       if (relevantIds.includes(s.trainer_id) && s.day_of_week === dayOfWeek) {
         const loc = (s.location ?? null) as Location | null;
         const key = `${s.time}|${loc ?? ''}`;
         const cur = byKey.get(key);
-        if (cur) cur.capacity += baseCapacity;
-        else byKey.set(key, { time: s.time, location: loc, capacity: baseCapacity });
+        if (cur) { cur.capacity += baseCapacity; cur.trainerCount += 1; }
+        else byKey.set(key, { time: s.time, location: loc, capacity: baseCapacity, trainerCount: 1 });
       }
     }
 
@@ -138,8 +140,10 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
     const availableLocations = LOCATIONS.filter(l => slotEntries.some(e => e.location === l));
     const getSlotCapacity = (time: string, location: Location | null): number =>
       byKey.get(`${time}|${location ?? ''}`)?.capacity ?? 0;
+    const getTrainerCount = (time: string, location: Location | null): number =>
+      byKey.get(`${time}|${location ?? ''}`)?.trainerCount ?? 0;
 
-    return { relevantIds, slotEntries, availableLocations, getSlotCapacity, baseCapacity };
+    return { relevantIds, slotEntries, availableLocations, getSlotCapacity, getTrainerCount, neededSpecialty, baseCapacity };
   }, [currentProgram, selProgram, selDate, trainers, trainerSchedules]);
 
   const GROUP_SIZE = 4;
@@ -153,13 +157,26 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
   // Datenstand nur einmal laufen. Der Cache leert sich bei jeder Datenänderung.
   const availabilityCache = React.useMemo(
     () => new Map<string, SlotAvailability>(),
-    [slotInfo, slotCounts, slotPlayers, selDate, selProgram, player],
+    [slotInfo, slotCounts, slotPlayers, slotReservations, selDate, selProgram, player],
   );
   const slotAvailability = (time: string, location: Location | null): SlotAvailability => {
     const cacheKey = `${time}|${location ?? ''}`;
     const cached = availabilityCache.get(cacheKey);
     if (cached) return cached;
-    const totalCapacity = slotInfo.getSlotCapacity(time, location);
+
+    // Stammplatz: ein reservierter Trainer fällt für alle anderen komplett weg
+    // (bei Gruppen also gleich vier Plätze — der Trainer steht für den festen
+    // Platz bereit). Die Zahlen kommen pro Datum vom Server, weil nur er weiß,
+    // ob der Inhaber dort bereits gebucht hat; die Slot-Zähler hier sind anonym.
+    const reservation = slotReservations.find(r =>
+      r.date === selDate && r.time === time &&
+      (r.location ?? null) === (location ?? null) &&
+      r.specialty === slotInfo.neededSpecialty);
+    const reservedForOthers = reservation?.blocked ?? 0;
+    const isMyReservation = (reservation?.mine ?? 0) > 0;
+    const freeTrainers = Math.max(0, slotInfo.getTrainerCount(time, location) - reservedForOthers);
+    const totalCapacity = slotInfo.baseCapacity * freeTrainers;
+
     const booked = slotCounts.find(s =>
       s.date === selDate && s.time === time && s.program === selProgram &&
       (s.location ?? null) === (location ?? null))?.booked ?? 0;
@@ -170,7 +187,11 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
 
     let freeInGroup = GROUP_SIZE;
     let groupUnavailable = false;
-    if (isGroup && !(playerBirthYear && playerLevel)) {
+    if (isGroup && freeTrainers === 0) {
+      // Alle Trainer dieses Slots sind Stammplätze anderer Spieler — es gibt
+      // hier keine Gruppe, in die man rutschen könnte.
+      groupUnavailable = true;
+    } else if (isGroup && !(playerBirthYear && playerLevel)) {
       // Ohne Jahrgang/Level ist die Gruppenregel nicht prüfbar. Früher lief die
       // Prüfung dann gar nicht und JEDER Slot galt als frei — ein Spieler ohne
       // Level konnte sich so in jede Gruppe buchen. Nicht prüfbar = nicht buchbar.
@@ -211,7 +232,7 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
       freeInGroup = rem === 0 ? GROUP_SIZE : GROUP_SIZE - rem;
     }
 
-    const result = { totalCapacity, booked, isGroup, freeInGroup, groupUnavailable };
+    const result = { totalCapacity, booked, isGroup, freeInGroup, groupUnavailable, isMyReservation };
     availabilityCache.set(cacheKey, result);
     return result;
   };

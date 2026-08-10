@@ -120,3 +120,102 @@ describe('validateBookingRules — Gruppen-Kompatibilität', () => {
     expect(validateBookingRules(c, req({ program: 'individual' }), NOW)).toBeNull();
   });
 });
+
+// ── Stammplatz (slot_reservations) ──────────────────────────────────────────
+// Reservierungen haengen an (Wochentag, Uhrzeit, Standort), nicht an einem
+// Trainer. Die Regel zaehlt daher freie Trainer gegen offene Reservierungen,
+// statt einen bestimmten Trainer zu sperren.
+describe('validateBookingRules — fester Trainingsplatz', () => {
+  const reservation = (over: any = {}) => ({
+    id: 'r1', player_id: 'p2', day_of_week: 1, time: '16:00',
+    location: 'Rüsselsheim', program: 'individual', ...over,
+  });
+
+  const trainerSchedules = [
+    { id: 's1', trainer_id: 't1', day_of_week: 1, time: '16:00', location: 'Rüsselsheim' },
+    { id: 's2', trainer_id: 't2', day_of_week: 1, time: '16:00', location: 'Rüsselsheim' },
+  ] as any;
+
+  const twoTrainers = (over: Partial<BookingContext> = {}) => ctx({
+    customers: [customer(), customer({ id: 'p2', full_name: 'Lena Lang' })],
+    trainers: [trainer(), trainer({ id: 't2', full_name: 'Trainer Tim' })],
+    trainerSchedules,
+    ...over,
+  });
+
+  test('einziger Trainer ist reserviert -> Buchung fuer ein anderes Kind abgelehnt', () => {
+    const c = ctx({
+      customers: [customer(), customer({ id: 'p2', full_name: 'Lena Lang' })],
+      slotReservations: [reservation()],
+    });
+    const r = validateBookingRules(c, req({ program: 'individual' }), NOW);
+    expect(r).toMatch(/fester Trainingsplatz von Lena Lang/);
+  });
+
+  test('der Inhaber selbst wird nicht ausgesperrt', () => {
+    const c = ctx({ slotReservations: [reservation({ player_id: 'p1' })] });
+    expect(validateBookingRules(c, req({ program: 'individual' }), NOW)).toBeNull();
+  });
+
+  test('skipReservation uebergeht die Sperre (Admin-Entscheidung)', () => {
+    const c = ctx({
+      customers: [customer(), customer({ id: 'p2', full_name: 'Lena Lang' })],
+      slotReservations: [reservation()],
+    });
+    expect(validateBookingRules(c, req({ program: 'individual', skipReservation: true }), NOW)).toBeNull();
+  });
+
+  test('zweiter freier Trainer am Slot -> Buchung bleibt moeglich', () => {
+    const c = twoTrainers({ slotReservations: [reservation()] });
+    expect(validateBookingRules(c, req({ program: 'individual' }), NOW)).toBeNull();
+  });
+
+  test('zweiter Trainer bereits belegt -> letzter freier Trainer ist geschuetzt', () => {
+    const c = twoTrainers({
+      slotReservations: [reservation()],
+      allAppointments: [{
+        id: 'a1', player_id: 'p9', date: '2026-06-15', time: '16:00', status: 'confirmed',
+        program: 'individual', trainer_id: 't2', location: 'Rüsselsheim',
+      } as AdminAppointment],
+    });
+    expect(validateBookingRules(c, req({ program: 'individual' }), NOW)).not.toBeNull();
+  });
+
+  // Verbrauchte Reservierung: hat der Inhaber an diesem Datum schon gebucht,
+  // haelt sie keinen zweiten Trainer mehr frei.
+  test('Inhaber hat an diesem Tag bereits gebucht -> Slot wieder frei', () => {
+    const c = twoTrainers({
+      slotReservations: [reservation()],
+      allAppointments: [{
+        id: 'a1', player_id: 'p2', date: '2026-06-15', time: '16:00', status: 'confirmed',
+        program: 'individual', trainer_id: 't2', location: 'Rüsselsheim',
+      } as AdminAppointment],
+    });
+    expect(validateBookingRules(c, req({ program: 'individual' }), NOW)).toBeNull();
+  });
+
+  test('Torwart-Reservierung blockiert keinen Feldspieler-Trainer', () => {
+    const c = ctx({
+      customers: [customer(), customer({ id: 'p2', full_name: 'Lena Lang' })],
+      slotReservations: [reservation({ program: 'torhueter_individual' })],
+    });
+    expect(validateBookingRules(c, req({ program: 'individual' }), NOW)).toBeNull();
+  });
+
+  // Wer eine bestehende Gruppe auffuellt, nimmt dem Stammplatz keinen Trainer weg.
+  test('Auffuellen einer laufenden Gruppe bleibt erlaubt', () => {
+    const c = twoTrainers({
+      customers: [
+        customer({ can_book_gruppe: true }),
+        customer({ id: 'p2', full_name: 'Lena Lang' }),
+      ],
+      slotReservations: [reservation()],
+      allAppointments: [{
+        id: 'a1', player_id: 'p9', date: '2026-06-15', time: '16:00', status: 'confirmed',
+        program: 'gruppe', trainer_id: 't1', location: 'Rüsselsheim',
+        session_birth_year: 2014, session_level: 'amateur',
+      } as AdminAppointment],
+    });
+    expect(validateBookingRules(c, req({ program: 'gruppe', trainerId: 't1' }), NOW)).toBeNull();
+  });
+});

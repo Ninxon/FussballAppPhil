@@ -166,3 +166,42 @@ export type SlotPlayer = {
   session_level: string | null;
   created_at: string;
 };
+
+// Stammplatz: ein wiederkehrender Einzeltraining-Slot, der fuer genau einen
+// Spieler freigehalten wird. Erzeugt KEINE Termine — er haelt nur einen
+// Trainerplatz frei, damit ein Nachholtermin ihn nicht wegschnappt.
+export type ReservationProgram = 'individual' | 'torhueter_individual';
+
+export type SlotReservation = {
+  id: string;
+  player_id: string;
+  /** 1 = Montag … 5 = Freitag (Wochenenden sind nicht buchbar). */
+  day_of_week: number;
+  time: string;
+  location: Location;
+  program: ReservationProgram;
+  note?: string | null;
+  created_at?: string;
+};
+
+export type SlotReservationInsert = {
+  player_id: string;
+  day_of_week: number;
+  time: string;
+  location: Location;
+  program: ReservationProgram;
+  note?: string | null;
+};
+
+// Anonyme Sicht (get_slot_reservations): pro konkretem Datum aufgeloest, weil
+// nur der Server weiss, ob der Inhaber dort bereits gebucht hat.
+export type SlotReservationCount = {
+  date: string;
+  time: string;
+  location: Location;
+  specialty: TrainerSpecialty;
+  /** Von anderen Spielern belegte Trainerplaetze. */
+  blocked: number;
+  /** Reservierungen der eigenen Kinder — fuer die Kennzeichnung im Slot. */
+  mine: number;
+};

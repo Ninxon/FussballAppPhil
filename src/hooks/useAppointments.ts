@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { Appointment, CancellationToken, ProgramCategory, SlotCount, SlotPlayer, Player, Location } from '../types';
+import { Appointment, CancellationToken, ProgramCategory, SlotCount, SlotPlayer, SlotReservationCount, Player, Location } from '../types';
 import { PROGRAM_CATEGORY, ProgramId } from '../constants/programs';
 import { checkDailyConflict, checkProgramPermission } from '../utils/bookingRules';
 import { fmtDate, fmtTime } from '../utils/date';
 import { AppointmentService } from '../services/appointmentService';
+import { SlotReservationService } from '../services/slotReservationService';
 import { TokenService } from '../services/tokenService';
 import { EmailService } from '../services/emailService';
 
@@ -17,6 +18,10 @@ function getCategory(program: string): ProgramCategory {
 export function useAppointments(activePlayer: Player | null) {
   const [slotCounts, setSlotCounts] = useState<SlotCount[]>([]);
   const [slotPlayers, setSlotPlayers] = useState<SlotPlayer[]>([]);
+  // Stammplaetze: fremdreservierte Trainerplaetze pro Datum/Slot. Aendert sich
+  // nur durch Admin-Eingriff, daher kein Realtime-Kanal — der Buchungsschirm
+  // laedt die Slot-Daten beim Betreten des Zeit-Schritts ohnehin neu.
+  const [slotReservations, setSlotReservations] = useState<SlotReservationCount[]>([]);
   const [myAppointments, setMyAppointments] = useState<Appointment[]>([]);
   const [activeTokens, setActiveTokens] = useState<CancellationToken[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,13 +36,15 @@ export function useAppointments(activePlayer: Player | null) {
     let isMounted = true;
 
     const loadSlotData = async () => {
-      const [countsData, playersData] = await Promise.all([
+      const [countsData, playersData, reservationData] = await Promise.all([
         AppointmentService.fetchSlotCounts(),
         AppointmentService.fetchSlotPlayers(),
+        SlotReservationService.fetchCounts(),
       ]);
       if (!isMounted) return;
       if (countsData.data) setSlotCounts(countsData.data as SlotCount[]);
       if (playersData.data) setSlotPlayers(playersData.data as SlotPlayer[]);
+      if (reservationData.data) setSlotReservations(reservationData.data as SlotReservationCount[]);
     };
 
     const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -48,6 +55,7 @@ export function useAppointments(activePlayer: Player | null) {
       } else if (!user) {
         setSlotCounts([]);
         setSlotPlayers([]);
+        setSlotReservations([]);
         setMyAppointments([]);
         setActiveTokens([]);
         setLoading(false);
@@ -188,12 +196,14 @@ export function useAppointments(activePlayer: Player | null) {
   }, [activePlayer?.id]);
 
   const refreshSlotData = useCallback(async () => {
-    const [countsData, playersData] = await Promise.all([
+    const [countsData, playersData, reservationData] = await Promise.all([
       AppointmentService.fetchSlotCounts(),
       AppointmentService.fetchSlotPlayers(),
+      SlotReservationService.fetchCounts(),
     ]);
     if (countsData.data) setSlotCounts(countsData.data as SlotCount[]);
     if (playersData.data) setSlotPlayers(playersData.data as SlotPlayer[]);
+    if (reservationData.data) setSlotReservations(reservationData.data as SlotReservationCount[]);
   }, []);
 
   // Vollständiger Neu-Fetch (Pull-to-Refresh): Slots + eigene Termine + Tokens.
@@ -335,5 +345,5 @@ export function useAppointments(activePlayer: Player | null) {
     return { error: null };
   };
 
-  return { slotCounts, slotPlayers, myAppointments, activeTokens, loading, addAppointment, cancelAppointment, refreshSlotData, refetch };
+  return { slotCounts, slotPlayers, slotReservations, myAppointments, activeTokens, loading, addAppointment, cancelAppointment, refreshSlotData, refetch };
 }

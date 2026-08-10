@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { PlayerLevel, PlayerType, BookingPermissions, TrainerSchedule, TrainerSpecialty, Location } from '../../types';
+import { PlayerLevel, PlayerType, BookingPermissions, TrainerSchedule, TrainerSpecialty, Location, SlotReservation, SlotReservationInsert } from '../../types';
 import { AppointmentService } from '../../services/appointmentService';
 import { ProfileService } from '../../services/profileService';
 import { PlayerService } from '../../services/playerService';
 import { TokenService } from '../../services/tokenService';
 import { TrainerScheduleService } from '../../services/trainerScheduleService';
+import { SlotReservationService } from '../../services/slotReservationService';
 import { CustomerService, CreateCustomerParams, extractFunctionError } from '../services/customerService';
 import { fetchAdminData } from '../services/adminDataLoader';
-import { validateBooking, insertBooking, bookRecurring, BookingContext } from '../services/adminBookingService';
+import { validateBooking, insertBooking, bookRecurring, findReservationConflict, BookingContext } from '../services/adminBookingService';
 import { PROGRAM_CATEGORY, ProgramId } from '../../constants/programs';
 import { fmtTime, todayStr } from '../../utils/date';
 import { supabase } from '../../lib/supabase';
@@ -69,6 +70,13 @@ export type TrainerProfile = {
  */
 export type MutationResult = { error: string | null };
 
+/**
+ * Buchungs-Mutationen zusätzlich mit `reservationConflict`: der Slot ist fester
+ * Trainingsplatz eines anderen Spielers. Kein harter Fehler — der Admin darf
+ * bewusst darüber buchen, die UI blendet dafür einen Schalter ein.
+ */
+export type BookingMutationResult = MutationResult & { reservationConflict?: boolean };
+
 const msg = (e: unknown, fallback: string): string =>
   (e as { message?: string } | null)?.message ?? fallback;
 
@@ -77,6 +85,7 @@ export function useAdminData() {
   const [allAppointments, setAllAppointments] = useState<AdminAppointment[]>([]);
   const [trainers, setTrainers] = useState<TrainerProfile[]>([]);
   const [trainerSchedules, setTrainerSchedules] = useState<TrainerSchedule[]>([]);
+  const [slotReservations, setSlotReservations] = useState<SlotReservation[]>([]);
   const [trainerMonthlyCounts, setTrainerMonthlyCounts] = useState<Record<string, Record<string, number>>>({});
   const [activeTokensByCustomer, setActiveTokensByCustomer] = useState<Record<string, { individual: number; gruppe: number }>>({});
   const [loading, setLoading] = useState(true);
@@ -91,6 +100,7 @@ export function useAdminData() {
       setAllAppointments(snapshot.appointments);
       setTrainers(snapshot.trainers);
       setTrainerSchedules(snapshot.trainerSchedules);
+      setSlotReservations(snapshot.slotReservations);
       setActiveTokensByCustomer(snapshot.tokenCountsByPlayer);
       setTrainerMonthlyCounts(snapshot.trainerMonthlyCounts);
       if (snapshot.error) setLoadError(snapshot.error);
@@ -104,7 +114,7 @@ export function useAdminData() {
   useEffect(() => { load(); }, [load]);
 
   // Kontext für die Buchungslogik (services/adminBookingService).
-  const bookingContext = (): BookingContext => ({ customers, allAppointments, trainers, trainerSchedules });
+  const bookingContext = (): BookingContext => ({ customers, allAppointments, trainers, trainerSchedules, slotReservations });
 
   // ── Termine ───────────────────────────────────────────────────────────────
 
@@ -146,12 +156,14 @@ export function useAdminData() {
 
   const addAppointmentForCustomer = async (
     userId: string, date: string, time: string, program: string,
-    trainerId?: string | null, skipGroupCompat = false,
-  ): Promise<MutationResult> => {
-    const req = { playerId: userId, date, time, program, trainerId, skipGroupCompat };
+    trainerId?: string | null, skipGroupCompat = false, skipReservation = false,
+  ): Promise<BookingMutationResult> => {
+    const req = { playerId: userId, date, time, program, trainerId, skipGroupCompat, skipReservation };
     const ctx = bookingContext();
     const reason = await validateBooking(ctx, req);
-    if (reason) return { error: reason };
+    if (reason) {
+      return { error: reason, reservationConflict: findReservationConflict(ctx, req) === reason };
+    }
 
     const { data, error } = await insertBooking(ctx, req);
     if (error) return { error: msg(error, 'Buchung fehlgeschlagen.') };
@@ -161,15 +173,20 @@ export function useAdminData() {
 
   const addRecurringAppointments = async (
     userId: string, dates: string[], time: string, program: string,
-    trainerId?: string | null, skipGroupCompat = false,
-  ): Promise<{ error: string | null; conflicts: { date: string; reason: string }[]; created: number }> => {
+    trainerId?: string | null, skipGroupCompat = false, skipReservation = false,
+  ): Promise<{ error: string | null; conflicts: { date: string; reason: string }[]; created: number; reservationConflict?: boolean }> => {
     const result = await bookRecurring(bookingContext(), dates, {
-      playerId: userId, time, program, trainerId, skipGroupCompat,
+      playerId: userId, time, program, trainerId, skipGroupCompat, skipReservation,
     });
     if (result.created.length > 0) {
       setAllAppointments(prev => [...prev, ...result.created]);
     }
-    return { error: result.error, conflicts: result.conflicts, created: result.created.length };
+    return {
+      error: result.error,
+      conflicts: result.conflicts,
+      created: result.created.length,
+      reservationConflict: result.reservationConflict,
+    };
   };
 
   // "Ist bezahlt": setzt den Abrechnungs-Stichtag der Einzeltrainings auf heute,
@@ -180,6 +197,24 @@ export function useAdminData() {
     const { error } = await PlayerService.update(customerId, { individual_billed_since: since });
     if (error) return { error: msg(error, 'Fehler beim Speichern.') };
     setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, individual_billed_since: since } : c));
+    return { error: null };
+  };
+
+  // ── Stammplätze ───────────────────────────────────────────────────────────
+  // Ein Stammplatz hält (Wochentag, Uhrzeit, Standort) für einen Spieler frei,
+  // ohne Termine zu erzeugen. Er gilt unbefristet — bis er hier gelöscht wird.
+
+  const addSlotReservation = async (row: SlotReservationInsert): Promise<MutationResult> => {
+    const { data, error } = await SlotReservationService.create(row);
+    if (error) return { error: msg(error, 'Fehler beim Anlegen.') };
+    if (data) setSlotReservations(prev => [...prev, fmtTime(data as SlotReservation)]);
+    return { error: null };
+  };
+
+  const removeSlotReservation = async (id: string): Promise<MutationResult> => {
+    const { error } = await SlotReservationService.remove(id);
+    if (error) return { error: msg(error, 'Fehler beim Löschen.') };
+    setSlotReservations(prev => prev.filter(r => r.id !== id));
     return { error: null };
   };
 
@@ -443,8 +478,9 @@ export function useAdminData() {
   };
 
   return {
-    customers, allAppointments, trainers, trainerSchedules, trainerMonthlyCounts, activeTokensByCustomer, loading, loadError,
+    customers, allAppointments, trainers, trainerSchedules, slotReservations, trainerMonthlyCounts, activeTokensByCustomer, loading, loadError,
     cancelAppointment, addAppointmentForCustomer, addRecurringAppointments,
+    addSlotReservation, removeSlotReservation,
     createCustomer, deleteCustomer,
     saveCustomerLevel, saveBookingPermissions, saveCustomerProfile, saveGroupCompatExempt,
     saveCustomerEmail, toggleCustomerActive, resetCustomerTokens, grantCustomerToken,

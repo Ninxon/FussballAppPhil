@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator } from 'react-native';
-import { TrainerSchedule, TrainerSpecialty } from '../../types';
+import { TrainerSchedule, TrainerSpecialty, SlotReservation } from '../../types';
 import { TrainerProfile, MutationResult } from '../hooks/useAdminData';
 import { SLOTS } from '../../constants/slots';
 import { LOCATIONS, LOC_COLOR, Location } from '../../constants/studio';
@@ -37,6 +37,8 @@ const SPECIALTY_COLOR: Record<TrainerSpecialty, string> = {
 interface Props {
   trainers: TrainerProfile[];
   trainerSchedules: TrainerSchedule[];
+  /** Stammplätze — als Marker im Raster, damit belegte Slots erklärbar sind. */
+  slotReservations?: SlotReservation[];
   trainerMonthlyCounts: Record<string, Record<string, number>>;
   onSetSlot: (trainerId: string, day: number, time: string, location: Location | null) => Promise<MutationResult>;
   onCreateTrainer: (params: { full_name: string; email: string; specialty: TrainerSpecialty }) => Promise<{ error: string | null; tempPassword?: string }>;
@@ -60,7 +62,7 @@ function shiftYearMonth(ym: string, delta: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-export function ZeitplanScreen({ trainers, trainerSchedules, trainerMonthlyCounts, onSetSlot, onCreateTrainer, onUpdateTrainer, onDeleteTrainer }: Props) {
+export function ZeitplanScreen({ trainers, trainerSchedules, slotReservations = [], trainerMonthlyCounts, onSetSlot, onCreateTrainer, onUpdateTrainer, onDeleteTrainer }: Props) {
   const [selectedTrainerId, setSelectedTrainerId] = useState<string | null>(
     trainers.length > 0 ? trainers[0].id : null,
   );
@@ -101,6 +103,18 @@ export function ZeitplanScreen({ trainers, trainerSchedules, trainerMonthlyCount
     trainerSchedules.find(
       s => s.trainer_id === selectedTrainerId && s.day_of_week === day && s.time === time,
     );
+
+  // Stammplätze hängen an (Wochentag, Uhrzeit, Standort), nicht an einem Trainer —
+  // gezeigt wird daher, wie viele feste Plätze auf den Standort DIESER Zelle
+  // entfallen und die Spezialität des gewählten Trainers brauchen.
+  const reservedAt = (day: number, time: string, loc: Location | null): number => {
+    if (!loc || !selectedTrainer) return 0;
+    const specialty = selectedTrainer.trainer_specialty ?? 'spieler';
+    return slotReservations.filter(r =>
+      r.day_of_week === day && r.time === time && r.location === loc &&
+      (r.program === 'torhueter_individual' ? 'torwart' : 'spieler') === specialty,
+    ).length;
+  };
 
   const handleCycle = async (day: number, time: string) => {
     if (!selectedTrainerId) return;
@@ -457,9 +471,18 @@ export function ZeitplanScreen({ trainers, trainerSchedules, trainerMonthlyCount
                   >
                     {loading
                       ? <ActivityIndicator size="small" color={color} />
-                      : <Text style={[styles.cellDot, { color, fontWeight: loc ? '800' : '400' }]}>
-                          {label}
-                        </Text>
+                      : <>
+                          <Text style={[styles.cellDot, { color, fontWeight: loc ? '800' : '400' }]}>
+                            {label}
+                          </Text>
+                          {/* Fester Trainingsplatz an diesem Slot: erklärt, warum
+                              er für andere Kinder nicht frei ist. */}
+                          {reservedAt(d.value, time, loc) > 0 && (
+                            <Text style={styles.cellReserved}>
+                              fest{reservedAt(d.value, time, loc) > 1 ? ` ×${reservedAt(d.value, time, loc)}` : ''}
+                            </Text>
+                          )}
+                        </>
                     }
                   </TouchableOpacity>
                 );
@@ -558,6 +581,7 @@ const styles = StyleSheet.create({
   cellActive: { backgroundColor: '#F0F7F2' },
   cellInactive: { backgroundColor: '#fff' },
   cellDot: { fontSize: 18 },
+  cellReserved: { fontSize: 9, fontWeight: '800', color: '#F5A84A', marginTop: 1, letterSpacing: 0.3 },
   cellDotActive: { color: '#5A8C6A' },
   cellDotInactive: { color: '#D1D5DB' },
 

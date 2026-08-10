@@ -1,12 +1,12 @@
 import { AppointmentService } from '../../services/appointmentService';
 import { fmtTime } from '../../utils/date';
-import { validateBookingRules, BookingContext, BookingRequest } from './bookingValidation';
+import { validateBookingRules, findReservationConflict, BookingContext, BookingRequest } from './bookingValidation';
 import type { AdminAppointment } from '../hooks/useAdminData';
 
 // Buchungs-Orchestrierung des Admin-Bereichs: verbindet die reinen Regeln
 // (bookingValidation) mit der Datenbank. Der Hook bleibt dadurch reine
 // Zustandsverwaltung.
-export { validateBookingRules } from './bookingValidation';
+export { validateBookingRules, findReservationConflict } from './bookingValidation';
 export type { BookingContext, BookingRequest } from './bookingValidation';
 
 /** Regelprüfung inkl. Tageslimit-Abfrage gegen die DB. null = buchbar. */
@@ -54,6 +54,8 @@ export type RecurringResult = {
   error: string | null;
   conflicts: { date: string; reason: string }[];
   created: AdminAppointment[];
+  /** Mindestens ein Konflikt ist ein fremder Stammplatz — übergehbar. */
+  reservationConflict?: boolean;
 };
 
 /**
@@ -71,12 +73,20 @@ export async function bookRecurring(
   }
 
   const conflicts: { date: string; reason: string }[] = [];
+  let reservationConflict = false;
   for (const date of dates) {
     const reason = await validateBooking(ctx, { ...req, date });
-    if (reason) conflicts.push({ date, reason });
+    if (reason) {
+      conflicts.push({ date, reason });
+      // Damit die UI den Übergehen-Schalter anbieten kann, statt den Admin
+      // rätseln zu lassen, warum eine sichtbar leere Serie nicht buchbar ist.
+      if (!req.skipReservation && findReservationConflict(ctx, { ...req, date }) === reason) {
+        reservationConflict = true;
+      }
+    }
   }
   if (conflicts.length > 0) {
-    return { error: null, conflicts, created: [] };
+    return { error: null, conflicts, created: [], reservationConflict };
   }
 
   const inserted: AdminAppointment[] = [];

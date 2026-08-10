@@ -1,9 +1,10 @@
-import { TrainerSchedule } from '../../types';
+import { TrainerSchedule, SlotReservation } from '../../types';
 import { AppointmentService } from '../../services/appointmentService';
 import { ProfileService } from '../../services/profileService';
 import { PlayerService } from '../../services/playerService';
 import { TokenService } from '../../services/tokenService';
 import { TrainerScheduleService } from '../../services/trainerScheduleService';
+import { SlotReservationService } from '../../services/slotReservationService';
 import { fmtTime } from '../../utils/date';
 import { supabase } from '../../lib/supabase';
 import type { CustomerProfile, AdminAppointment, TrainerProfile } from '../hooks/useAdminData';
@@ -13,9 +14,10 @@ export type AdminDataSnapshot = {
   appointments: AdminAppointment[];
   trainers: TrainerProfile[];
   trainerSchedules: TrainerSchedule[];
+  slotReservations: SlotReservation[];
   tokenCountsByPlayer: Record<string, { individual: number; gruppe: number }>;
   trainerMonthlyCounts: Record<string, Record<string, number>>;
-  /** Erster Fehler eines der sechs Fetches (null = alles geladen). */
+  /** Erster Fehler eines der sieben Fetches (null = alles geladen). */
   error: string | null;
 };
 
@@ -29,6 +31,7 @@ export async function fetchAdminData(): Promise<AdminDataSnapshot> {
     { data: allTokens, error: tokensErr },
     { data: schedules, error: schedulesErr },
     { data: monthlyCounts, error: countsErr },
+    { data: reservations, error: reservationsErr },
   ] = await Promise.all([
     PlayerService.fetchAllWithParent(),
     AppointmentService.fetchAllDesc(),
@@ -36,9 +39,10 @@ export async function fetchAdminData(): Promise<AdminDataSnapshot> {
     TokenService.fetchAllActive(),
     TrainerScheduleService.fetchAll(),
     supabase.rpc('get_trainer_monthly_counts'),
+    SlotReservationService.fetchAll(),
   ]);
 
-  const firstError = profilesErr ?? apptsErr ?? trainersErr ?? tokensErr ?? schedulesErr ?? countsErr;
+  const firstError = profilesErr ?? apptsErr ?? trainersErr ?? tokensErr ?? schedulesErr ?? countsErr ?? reservationsErr;
 
   // players-Zeile (+ Eltern) auf die CustomerProfile-Form der Admin-UI mappen.
   const customers: CustomerProfile[] = (playerRows ?? []).map((pl: any) => ({
@@ -84,6 +88,9 @@ export async function fetchAdminData(): Promise<AdminDataSnapshot> {
     appointments: ((appointments ?? []) as AdminAppointment[]).map(fmtTime),
     trainers: (trainerProfiles ?? []) as TrainerProfile[],
     trainerSchedules: ((schedules ?? []) as TrainerSchedule[]).map(fmtTime),
+    // fmtTime schneidet den nativen time-Typ auf HH:MM — sonst passt der
+    // Vergleich mit den SLOTS-Chips ('18:00' vs '18:00:00') nicht.
+    slotReservations: ((reservations ?? []) as SlotReservation[]).map(fmtTime),
     tokenCountsByPlayer,
     trainerMonthlyCounts,
     error: firstError ? (firstError.message ?? 'Fehler beim Laden.') : null,
