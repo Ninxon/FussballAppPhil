@@ -20,3 +20,6 @@ supabase_cli*
 supabase/.temp/
 .DS_Store
 Thumbs.db
+
+# Lokal generierter Wissensgraph (graphify) — Ausgabeartefakt, kein Quellcode.
+graphify-out/
