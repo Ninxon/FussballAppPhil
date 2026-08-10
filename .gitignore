@@ -24,6 +24,9 @@ yarn-error.*
 supabase.exe
 supabase_cli*
 supabase/.temp/
+
+# Lokal generierter Wissensgraph (graphify) — Ausgabeartefakt, kein Quellcode.
+graphify-out/
 .DS_Store
 Thumbs.db
 
