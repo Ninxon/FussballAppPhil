@@ -152,11 +152,13 @@ export function PermissionsSection({
           <Text style={styles.tokenDisplayCount}>{tokenCounts?.gruppe ?? 0}</Text>
           <Text style={styles.tokenDisplayLabel}>Gruppentraining</Text>
         </View>
-        <View style={styles.tokenDisplayItem}>
-          <Text style={styles.tokenDisplayCount}>{confirmedTotal}</Text>
-          <Text style={styles.tokenDisplayLabel}>Termine bisher</Text>
-        </View>
       </View>
+
+      {/* Bewusst ausserhalb der Nachholtermin-Kacheln: zaehlt ALLE bereits
+          stattgefundenen Termine ueber alle Programme, hat mit Gutscheinen nichts zu tun. */}
+      <Text style={styles.totalLine}>
+        <Text style={styles.totalLineCount}>{confirmedTotal}</Text> Termine bisher · alle Programme, bereits stattgefunden
+      </Text>
 
       {grantSuccess && !showGrant && (
         <Text style={styles.grantSuccessText}>✓ Nachholtermin vergeben. Der Kunde kann ihn jetzt buchen.</Text>

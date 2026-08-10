@@ -54,6 +54,8 @@ export const styles = StyleSheet.create({
   tokenDisplayItem: { flex: 1, backgroundColor: '#F4F8FF', borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(21,34,56,0.08)' },
   tokenDisplayCount: { fontSize: 28, fontWeight: '800', color: '#152238' },
   tokenDisplayLabel: { fontSize: 11, fontWeight: '600', color: '#7A90AE', marginTop: 4, textAlign: 'center' },
+  totalLine: { fontSize: 12, color: '#7A90AE', marginTop: 10 },
+  totalLineCount: { fontSize: 13, fontWeight: '800', color: '#4A6080' },
   tokenResetBtn: { marginTop: 14, alignSelf: 'flex-start', backgroundColor: 'rgba(239,68,68,0.08)', borderRadius: 8, paddingVertical: 9, paddingHorizontal: 16, borderWidth: 1, borderColor: 'rgba(239,68,68,0.25)' },
   tokenResetBtnText: { fontSize: 13, fontWeight: '700', color: '#EF4444' },
   tokenResetBox: { marginTop: 14, backgroundColor: '#FEF2F2', borderWidth: 1.5, borderColor: '#FECACA', borderRadius: 12, padding: 16 },
