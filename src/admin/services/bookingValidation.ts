@@ -45,7 +45,14 @@ export function validateBookingRules(ctx: BookingContext, req: BookingRequest, n
     }
   }
 
-  if (trainerId) {
+  // Ohne Trainer kein Standort — und ohne Standort kein Termin (appointments.location
+  // ist NOT NULL). Fachlich wird ohnehin immer mit Trainer gebucht; hier steht die
+  // Regel explizit, damit daraus eine klare Meldung wird statt eines DB-Fehlers.
+  if (!trainerId) {
+    return 'Bitte einen Trainer auswählen — daran hängt der Standort des Termins.';
+  }
+
+  {
     const jsDay = new Date(date + 'T12:00:00').getDay();
     const dayOfWeek = jsDay === 0 ? 7 : jsDay;
     const trainerHasSlot = ctx.trainerSchedules.some(

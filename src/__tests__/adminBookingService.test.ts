@@ -71,8 +71,12 @@ describe('validateBookingRules — Trainer-Zeitplan', () => {
     expect(r).toMatch(/keinen Unterricht eingeplant/);
   });
 
-  test('ohne Trainer entfällt die Zeitplan-Prüfung', () => {
-    expect(validateBookingRules(ctx(), req({ trainerId: null, time: '18:00' }), NOW)).toBeNull();
+  // Frueher entfiel ohne Trainer die Zeitplan-Pruefung und der Termin wurde ohne
+  // Standort angelegt. Der Standort haengt am Trainer-Slot und ist Pflicht
+  // (appointments.location NOT NULL), also ist die Buchung ohne Trainer ungueltig.
+  test('ohne Trainer wird die Buchung abgelehnt (Standort haengt am Trainer)', () => {
+    const r = validateBookingRules(ctx(), req({ trainerId: null, time: '18:00' }), NOW);
+    expect(r).toMatch(/Trainer/);
   });
 
   test('Spieler-Trainer kann im Slot nicht Individual und Gruppe mischen', () => {
