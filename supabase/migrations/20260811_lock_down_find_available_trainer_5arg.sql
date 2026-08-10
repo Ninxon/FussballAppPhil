@@ -1,0 +1,21 @@
+-- ============================================================
+-- find_available_trainer (5-arg): EXECUTE für authenticated entziehen
+-- ============================================================
+-- Beim Anlegen einer NEUEN Funktionssignatur greifen die Supabase-Default-
+-- Privilegien und geben `authenticated` automatisch EXECUTE. CREATE OR REPLACE
+-- einer bestehenden Signatur erbt dagegen die alten Rechte — deshalb fällt das
+-- nur bei neuen Überladungen an, und genau so ist die 5-arg-Variante aus
+-- 20260810_slot_reservations.sql offen gestartet.
+--
+-- Aufgerufen wird sie ausschließlich intern aus book_with_token. Das läuft als
+-- SECURITY DEFINER unter postgres und bringt die Berechtigung als Eigentümer
+-- mit, unabhängig davon, was der aufrufende Client darf. Gleiche Absicht wie
+-- die frühere Migration lock_down_find_available_trainer (3-arg).
+--
+-- Offen und bewusst NICHT hier geändert: die 4-arg-Variante aus
+-- 20260527_location_aware_booking.sql ist aus demselben Grund weiterhin für
+-- `authenticated` ausführbar. Das ist eine Bestandslücke, kein Teil dieses
+-- Features — separat zu entscheiden.
+-- ============================================================
+
+REVOKE EXECUTE ON FUNCTION public.find_available_trainer(date, time without time zone, text, text, uuid) FROM authenticated;
