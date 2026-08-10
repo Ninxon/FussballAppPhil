@@ -151,7 +151,7 @@ describe('addAppointment — Fehlerfälle', () => {
     const { result } = await loadHookWithState([], []);
 
     let r: any;
-    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'individual'); });
+    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'individual', 'Rüsselsheim'); });
 
     expect(r.error?.message).toMatch(/Stornierungstoken/);
     const rpcCalls = (supabase.rpc as jest.Mock).mock.calls.filter(c => c[0] === 'book_with_token');
@@ -163,7 +163,7 @@ describe('addAppointment — Fehlerfälle', () => {
     const { result } = await loadHookWithState([], [gruppeToken]);
 
     let r: any;
-    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'individual'); });
+    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'individual', 'Rüsselsheim'); });
 
     expect(r.error?.message).toMatch(/Stornierungstoken/);
   });
@@ -174,7 +174,7 @@ describe('addAppointment — Fehlerfälle', () => {
 
     let r: any;
     // Datum ist nach expires_at → Client-seitiger Guard schlägt an
-    await act(async () => { r = await result.current.addAppointment('2021-06-01', '10:00', 'individual'); });
+    await act(async () => { r = await result.current.addAppointment('2021-06-01', '10:00', 'individual', 'Rüsselsheim'); });
 
     expect(r.error?.message).toBeTruthy();
     const rpcCalls = (supabase.rpc as jest.Mock).mock.calls.filter(c => c[0] === 'book_with_token');
@@ -187,7 +187,7 @@ describe('addAppointment — Fehlerfälle', () => {
     const { result } = await loadHookWithState([], [token], restricted);
 
     let r: any;
-    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'individual'); });
+    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'individual', 'Rüsselsheim'); });
 
     expect(r.error?.message).toBeTruthy();
     const rpcCalls = (supabase.rpc as jest.Mock).mock.calls.filter(c => c[0] === 'book_with_token');
@@ -203,7 +203,7 @@ describe('addAppointment — Fehlerfälle', () => {
     const { result } = await loadHookWithState(existing, [token]);
 
     let r: any;
-    await act(async () => { r = await result.current.addAppointment('2099-07-01', '15:00', 'individual'); });
+    await act(async () => { r = await result.current.addAppointment('2099-07-01', '15:00', 'individual', 'Rüsselsheim'); });
 
     expect(r.error?.message).toBeTruthy();
     const rpcCalls = (supabase.rpc as jest.Mock).mock.calls.filter(c => c[0] === 'book_with_token');
@@ -224,7 +224,7 @@ describe('addAppointment — Fehlerfälle', () => {
     const { result } = await loadHookWithState(existing, [token]);
 
     let r: any;
-    await act(async () => { r = await result.current.addAppointment('2099-07-02', '10:00', 'individual'); });
+    await act(async () => { r = await result.current.addAppointment('2099-07-02', '10:00', 'individual', 'Rüsselsheim'); });
 
     expect(r.error).toBeNull();
   });
@@ -234,7 +234,7 @@ describe('addAppointment — Fehlerfälle', () => {
     const { result } = renderHook(() => useAppointments(null));
 
     let r: any;
-    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'individual'); });
+    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'individual', 'Rüsselsheim'); });
 
     expect(r.error?.message).toMatch(/Spieler/);
     expect(supabase.rpc).not.toHaveBeenCalled();
@@ -247,7 +247,7 @@ describe('addAppointment — Fehlerfälle', () => {
     (supabase.rpc as jest.Mock).mockResolvedValue({ data: null, error: { message: 'Verbindungsfehler' } });
 
     let r: any;
-    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'individual'); });
+    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'individual', 'Rüsselsheim'); });
 
     expect(r.error).toBeTruthy();
   });
@@ -262,7 +262,7 @@ describe('addAppointment — Fehlerfälle', () => {
     });
 
     let r: any;
-    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'individual'); });
+    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'individual', 'Rüsselsheim'); });
 
     expect(r.error?.message).toMatch(/Token nicht gefunden/);
   });
@@ -286,7 +286,7 @@ describe('addAppointment — Erfolgspfad', () => {
     const token = validToken();
     const { result } = await loadHookWithState([], [token]);
 
-    await act(async () => { await result.current.addAppointment('2099-07-01', '10:00', 'individual'); });
+    await act(async () => { await result.current.addAppointment('2099-07-01', '10:00', 'individual', 'Rüsselsheim'); });
 
     expect(result.current.myAppointments).toHaveLength(1);
     expect(result.current.myAppointments[0].id).toBe('new-appt-1');
@@ -296,7 +296,7 @@ describe('addAppointment — Erfolgspfad', () => {
     const token = validToken();
     const { result } = await loadHookWithState([], [token]);
 
-    await act(async () => { await result.current.addAppointment('2099-07-01', '10:00', 'individual'); });
+    await act(async () => { await result.current.addAppointment('2099-07-01', '10:00', 'individual', 'Rüsselsheim'); });
 
     expect(result.current.activeTokens).toHaveLength(0);
   });
@@ -305,7 +305,7 @@ describe('addAppointment — Erfolgspfad', () => {
     const token = validToken();
     const { result } = await loadHookWithState([], [token]);
 
-    await act(async () => { await result.current.addAppointment('2099-07-01', '10:00', 'individual'); });
+    await act(async () => { await result.current.addAppointment('2099-07-01', '10:00', 'individual', 'Rüsselsheim'); });
 
     const slot = result.current.slotCounts.find(
       s => s.date === '2099-07-01' && s.time === '10:00' && s.program === 'individual',
@@ -317,7 +317,7 @@ describe('addAppointment — Erfolgspfad', () => {
     const token = validToken({ id: 'tok-spec' });
     const { result } = await loadHookWithState([], [token]);
 
-    await act(async () => { await result.current.addAppointment('2099-07-01', '10:00', 'individual'); });
+    await act(async () => { await result.current.addAppointment('2099-07-01', '10:00', 'individual', 'Rüsselsheim'); });
 
     expect(supabase.rpc).toHaveBeenCalledWith('book_with_token', {
       p_player_id: 'user-1',
@@ -325,8 +325,19 @@ describe('addAppointment — Erfolgspfad', () => {
       p_date: '2099-07-01',
       p_time: '10:00',
       p_program: 'individual',
-      p_location: null,
+      // Der Standort des gewaehlten Slots muss durchgereicht werden. Frueher kam
+      // hier null an, weil App.tsx den vierten Parameter verschluckt hat — und
+      // Termine ohne Standort waren fuer die Gruppenpruefung unsichtbar.
+      p_location: 'Rüsselsheim',
     });
+  });
+
+  it('ohne Standort wird gar nicht gebucht', async () => {
+    const { result } = await loadHookWithState([], [validToken()]);
+    let r: any;
+    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'individual', null as any); });
+    expect(r.error?.message).toMatch(/Standort/);
+    expect((supabase.rpc as jest.Mock).mock.calls.filter(c => c[0] === 'book_with_token')).toHaveLength(0);
   });
 
   it('bei zwei Tokens (individual + gruppe) wird der passende kategorie-Token verwendet', async () => {
@@ -342,7 +353,7 @@ describe('addAppointment — Erfolgspfad', () => {
 
     const { result } = await loadHookWithState([], [individualToken, gruppeToken]);
 
-    await act(async () => { await result.current.addAppointment('2099-07-01', '10:00', 'gruppe'); });
+    await act(async () => { await result.current.addAppointment('2099-07-01', '10:00', 'gruppe', 'Rüsselsheim'); });
 
     expect(supabase.rpc).toHaveBeenCalledWith('book_with_token', expect.objectContaining({
       p_token_id: 'tok-g',
@@ -365,7 +376,7 @@ describe('addAppointment — Erfolgspfad', () => {
     const { result } = await loadHookWithState([], [gruppeToken], athletikProfile);
 
     let r: any;
-    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'athletik'); });
+    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'athletik', 'Rüsselsheim'); });
 
     expect(r.error).toBeNull();
     expect(supabase.rpc).toHaveBeenCalledWith('book_with_token', expect.objectContaining({
@@ -379,7 +390,7 @@ describe('addAppointment — Erfolgspfad', () => {
     const { result } = await loadHookWithState([], [token]);
 
     let r: any;
-    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'individual'); });
+    await act(async () => { r = await result.current.addAppointment('2099-07-01', '10:00', 'individual', 'Rüsselsheim'); });
 
     expect(r.error).toBeNull();
   });
@@ -403,7 +414,7 @@ describe('addAppointment — Race Condition Guard', () => {
     const token = validToken();
     const { result } = await loadHookWithState([], [token]);
 
-    await act(async () => { await result.current.addAppointment('2099-07-01', '10:00', 'individual'); });
+    await act(async () => { await result.current.addAppointment('2099-07-01', '10:00', 'individual', 'Rüsselsheim'); });
 
     // slotCounts nach optimistischem Update: 1
     const afterOptimistic = result.current.slotCounts.find(

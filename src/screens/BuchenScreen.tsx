@@ -22,7 +22,9 @@ interface Props {
   myAppointments: Appointment[];
   player: Player | null;
   activeTokens: CancellationToken[];
-  addAppointment: (date: string, time: string, program: string, location?: Location | null) => Promise<{ error: any }>;
+  // location ist Pflicht: der Slot bringt ihn immer mit (trainer_schedules.location
+  // ist NOT NULL). Als optionaler Parameter ging er unterwegs verloren.
+  addAppointment: (date: string, time: string, program: string, location: Location) => Promise<{ error: any }>;
   setTab: (t: Tab) => void;
   trainerSchedules?: TrainerSchedule[];
   trainers?: Array<{ id: string; trainer_specialty?: string | null }>;
@@ -232,6 +234,10 @@ export function BuchenScreen({ slotCounts, slotPlayers, myAppointments, player, 
 
   const doBook = async () => {
     setBookingError(null);
+    if (!selLocation) {
+      setBookingError('Für diesen Slot fehlt der Standort — bitte Uhrzeit erneut wählen.');
+      return;
+    }
     const { error } = await addAppointment(selDate!, selTime!, selProgram!, selLocation);
     if (error) {
       setBookingError(error.message ?? 'Buchung fehlgeschlagen.');

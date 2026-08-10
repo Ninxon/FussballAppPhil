@@ -50,6 +50,16 @@ AS $$
 $$;
 COMMENT ON FUNCTION public.get_slot_players() IS '@omit';
 
+-- ── 3) Standort dauerhaft verpflichtend ─────────────────────────────────────
+-- Ursache der NULL-Standorte war App.tsx: der Wrapper reichte nur drei der vier
+-- Argumente an addAppointment weiter, der Standort fiel auf den Default null.
+-- Der Client verlangt ihn jetzt (Typ Location statt Location | null); dieser
+-- Constraint ist das Netz darunter, das auch jeden kuenftigen Pfad abfaengt —
+-- inklusive book_with_token, das p_location bisher ungeprueft durchreicht.
+-- Voraussetzung ist Schritt 1: danach steht laut Pruefung keine Zeile mehr offen.
+ALTER TABLE public.appointments
+  ALTER COLUMN location SET NOT NULL;
+
 -- ── Offen (bewusst nicht in dieser Migration) ───────────────────────────────
 -- Die Alters-/Level-Regel lebt weiterhin ausschließlich im Client. Kapazität,
 -- Tageslimit und Trainerverfügbarkeit sind serverseitig abgesichert, diese Regel

@@ -245,7 +245,7 @@ function AppInner() {
                 myAppointments={myAppointments}
                 activeTokens={activeTokens}
                 player={activePlayer}
-                addAppointment={(d, t, p) => addAppointment(d, t, p)}
+                addAppointment={addAppointment}
                 setTab={setTab}
                 trainerSchedules={trainerSchedules}
                 trainers={trainerProfiles}

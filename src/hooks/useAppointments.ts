@@ -215,9 +215,13 @@ export function useAppointments(activePlayer: Player | null) {
 
   const addAppointment = async (
     date: string, time: string, program: string,
-    location: Location | null = null,
+    // Kein Default null mehr: der Standort hängt am Trainer-Slot und ist dort
+    // NOT NULL. Ein Termin ohne Standort war nie gültig, entstand aber genau
+    // über diesen Default — und war dann für die Gruppenprüfung unsichtbar.
+    location: Location,
   ) => {
     if (!activePlayer) return { error: { message: 'Kein Spieler ausgewählt.' } };
+    if (!location) return { error: { message: 'Kein Standort für diesen Slot — bitte Slot erneut wählen.' } };
 
     const category = getCategory(program);
     const activeToken = activeTokens.find(t => t.category === category);
