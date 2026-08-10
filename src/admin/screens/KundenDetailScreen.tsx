@@ -7,7 +7,7 @@ import { CustomerHeader } from './kundenDetail/CustomerHeader';
 import { ContactSection } from './kundenDetail/ContactSection';
 import { LevelSection } from './kundenDetail/LevelSection';
 import { PermissionsSection } from './kundenDetail/PermissionsSection';
-import { AttendanceSection } from './kundenDetail/AttendanceSection';
+import { IndividualBillingSection } from './kundenDetail/IndividualBillingSection';
 import { AppointmentsSection } from './kundenDetail/AppointmentsSection';
 import { styles } from './kundenDetail/styles';
 
@@ -28,7 +28,7 @@ interface Props {
   onToggleActive: (customerId: string, isActive: boolean) => Promise<MutationResult>;
   onResetTokens: (customerId: string) => Promise<MutationResult>;
   onGrantToken: (customerId: string, category: 'individual' | 'gruppe', expiresDate: string) => Promise<MutationResult>;
-  onMarkAttended: (apptId: string, attended: boolean | null) => Promise<MutationResult>;
+  onMarkIndividualBilled: (customerId: string) => Promise<MutationResult>;
   onDeleteCustomer: (id: string) => Promise<MutationResult>;
 }
 
@@ -39,12 +39,13 @@ export function KundenDetailScreen({
   customer, appointments, trainers, tokenCounts,
   onBack, onCancelAppointment, onAddAppointment, onAddRecurring,
   onSaveLevel, onSaveBookingPermissions, onSaveGroupExempt, onSaveProfile, onSaveEmail,
-  onToggleActive, onResetTokens, onGrantToken, onMarkAttended, onDeleteCustomer,
+  onToggleActive, onResetTokens, onGrantToken, onMarkIndividualBilled, onDeleteCustomer,
 }: Props) {
   const ts = todayStr();
 
   const { confirmedTotal, upcoming, past } = React.useMemo(() => ({
-    confirmedTotal: appointments.filter(a => a.status === 'confirmed').length,
+    // Nur bereits stattgefundene Termine — "gesamt" inkl. Zukunft war nicht interpretierbar.
+    confirmedTotal: appointments.filter(a => a.status === 'confirmed' && a.date < ts).length,
     upcoming: appointments
       .filter(a => a.date >= ts && a.status === 'confirmed')
       .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)),
@@ -81,10 +82,12 @@ export function KundenDetailScreen({
         onGrantToken={onGrantToken}
       />
 
-      <AttendanceSection
+      <IndividualBillingSection
+        customerId={customer.id}
         appointments={appointments}
+        billedSince={customer.individual_billed_since}
         todayStr={ts}
-        onMarkAttended={onMarkAttended}
+        onMarkIndividualBilled={onMarkIndividualBilled}
       />
 
       <AppointmentsSection

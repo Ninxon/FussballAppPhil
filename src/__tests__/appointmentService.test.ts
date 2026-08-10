@@ -90,19 +90,6 @@ describe('AppointmentService.updateStatus', () => {
   });
 });
 
-describe('AppointmentService.updateAttended', () => {
-  it('calls update with attended=true', () => {
-    AppointmentService.updateAttended('appt-1', true);
-    expect(mockChain.update).toHaveBeenCalledWith({ attended: true });
-    expect(mockChain.eq).toHaveBeenCalledWith('id', 'appt-1');
-  });
-
-  it('calls update with attended=null', () => {
-    AppointmentService.updateAttended('appt-1', null);
-    expect(mockChain.update).toHaveBeenCalledWith({ attended: null });
-  });
-});
-
 describe('AppointmentService.checkDailyConflict', () => {
   it('filters by player_id, date and confirmed status', () => {
     AppointmentService.checkDailyConflict('player-1', '2024-06-01');

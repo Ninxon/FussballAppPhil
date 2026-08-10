@@ -57,6 +57,7 @@ export async function fetchAdminData(): Promise<AdminDataSnapshot> {
     role: 'customer',
     level: pl.level ?? null,
     skip_group_age_level_check: pl.skip_group_age_level_check ?? false,
+    individual_billed_since: pl.individual_billed_since,
     can_book_individual: pl.can_book_individual,
     can_book_gruppe: pl.can_book_gruppe,
     can_book_athletik: pl.can_book_athletik,

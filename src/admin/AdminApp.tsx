@@ -46,7 +46,7 @@ export function AdminApp({ onLogout }: Props) {
     saveCustomerLevel, saveBookingPermissions, saveCustomerProfile, saveGroupCompatExempt,
     saveCustomerEmail, toggleCustomerActive, resetCustomerTokens, grantCustomerToken,
     setScheduleSlot, createTrainer, updateTrainer, deleteTrainer,
-    markAttended,
+    markIndividualBilled,
   } = useAdminData();
 
   const [calendarDay, setCalendarDay] = useState<string | undefined>(undefined);
@@ -136,7 +136,7 @@ export function AdminApp({ onLogout }: Props) {
           onToggleActive={toggleCustomerActive}
           onResetTokens={resetCustomerTokens}
           onGrantToken={grantCustomerToken}
-          onMarkAttended={markAttended}
+          onMarkIndividualBilled={markIndividualBilled}
           onDeleteCustomer={async (id) => {
             const { error } = await deleteCustomer(id);
             if (!error) setSelectedCustomerId(null);

@@ -9,7 +9,7 @@ import { CustomerService, CreateCustomerParams, extractFunctionError } from '../
 import { fetchAdminData } from '../services/adminDataLoader';
 import { validateBooking, insertBooking, bookRecurring, BookingContext } from '../services/adminBookingService';
 import { PROGRAM_CATEGORY, ProgramId } from '../../constants/programs';
-import { fmtTime } from '../../utils/date';
+import { fmtTime, todayStr } from '../../utils/date';
 import { supabase } from '../../lib/supabase';
 
 // Im Eltern-/Spieler-Modell ist eine "Kundenzeile" der Admin-UI genau EIN
@@ -36,6 +36,8 @@ export type CustomerProfile = {
   role: string;
   level: PlayerLevel | null;
   skip_group_age_level_check: boolean;
+  // Stichtag der letzten Einzeltraining-Abrechnung ('YYYY-MM-DD').
+  individual_billed_since: string;
 } & BookingPermissions;
 
 export type AdminAppointment = {
@@ -48,7 +50,6 @@ export type AdminAppointment = {
   trainer_id?: string | null;
   session_level?: string | null;
   session_birth_year?: number | null;
-  attended?: boolean | null;
   location?: string | null;
   short_notice_cancel?: boolean | null;
   is_makeup?: boolean | null;
@@ -171,10 +172,14 @@ export function useAdminData() {
     return { error: result.error, conflicts: result.conflicts, created: result.created.length };
   };
 
-  const markAttended = async (apptId: string, attended: boolean | null): Promise<MutationResult> => {
-    const { error } = await AppointmentService.updateAttended(apptId, attended);
+  // "Ist bezahlt": setzt den Abrechnungs-Stichtag der Einzeltrainings auf heute,
+  // der 4er-Zähler startet damit wieder bei 0. Reine Merkhilfe — Buchungen und
+  // Gutscheine bleiben davon unberührt.
+  const markIndividualBilled = async (customerId: string): Promise<MutationResult> => {
+    const since = todayStr();
+    const { error } = await PlayerService.update(customerId, { individual_billed_since: since });
     if (error) return { error: msg(error, 'Fehler beim Speichern.') };
-    setAllAppointments(prev => prev.map(a => a.id === apptId ? { ...a, attended } : a));
+    setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, individual_billed_since: since } : c));
     return { error: null };
   };
 
@@ -444,7 +449,7 @@ export function useAdminData() {
     saveCustomerLevel, saveBookingPermissions, saveCustomerProfile, saveGroupCompatExempt,
     saveCustomerEmail, toggleCustomerActive, resetCustomerTokens, grantCustomerToken,
     setScheduleSlot, createTrainer, updateTrainer, deleteTrainer,
-    markAttended,
+    markIndividualBilled,
     reload: load,
   };
 }

@@ -9,7 +9,7 @@ const customer = (over: Partial<CustomerProfile> = {}): CustomerProfile => ({
   id: 'p1', parent_id: 'e1', full_name: 'Max Muster', email: 'max@test.de', phone: '',
   birth_date: '2014-05-01', address: null, parent_name: null, location: 'Rüsselsheim',
   player_type: 'feldspieler', customer_number: 101, is_active: true, role: 'customer',
-  level: 'amateur', skip_group_age_level_check: false,
+  level: 'amateur', skip_group_age_level_check: false, individual_billed_since: '2026-06-01',
   can_book_individual: true, can_book_gruppe: true, can_book_athletik: true,
   can_book_torhueter_individual: false, can_book_torhueter_gruppe: false,
   ...over,

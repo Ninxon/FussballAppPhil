@@ -4,6 +4,7 @@ import { CustomerProfile, AdminAppointment } from '../hooks/useAdminData';
 import { LEVEL_COLORS, LEVEL_LABELS, PlayerLevel, PlayerType } from '../../types';
 import { LOCATIONS, Location } from '../../constants/studio';
 import { todayStr } from '../../utils/date';
+import { individualBillingStatus, IndividualBillingStatus } from '../../utils/billing';
 import { webInputReset } from '../../styles/webInput';
 import { PlayerTypeChips } from '../components/PlayerTypeChips';
 
@@ -31,6 +32,7 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
   const [filterLocation, setFilterLocation] = useState<Location | 'all'>('all');
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
   const [filterAppt, setFilterAppt] = useState<'all' | 'with' | 'without'>('all');
+  const [filterBilling, setFilterBilling] = useState<'all' | 'due'>('all');
   const [showForm, setShowForm] = useState(false);
   // 'new' = neuer Eltern-Account (mit Login), 'sibling' = weiteres Kind zu
   // bestehendem Elternteil (kein neuer Login).
@@ -127,9 +129,28 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
     }
   };
 
+  // Abrechnungsstand der Einzeltrainings je Spieler einmal vorberechnen — der
+  // Filter unten und jede Kundenzeile greifen darauf zu. Termine vorher nach
+  // Spieler gruppieren, damit nicht pro Kunde die Gesamtliste gescannt wird.
+  const billingByPlayer = useMemo(() => {
+    const ts = todayStr();
+    const apptsByPlayer = new Map<string, AdminAppointment[]>();
+    for (const a of allAppointments) {
+      const list = apptsByPlayer.get(a.player_id);
+      if (list) list.push(a);
+      else apptsByPlayer.set(a.player_id, [a]);
+    }
+    const map = new Map<string, IndividualBillingStatus>();
+    for (const c of customers) {
+      map.set(c.id, individualBillingStatus(apptsByPlayer.get(c.id) ?? [], c.individual_billed_since, ts));
+    }
+    return map;
+  }, [customers, allAppointments]);
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
     let list = customers;
+    if (filterBilling === 'due') list = list.filter(c => billingByPlayer.get(c.id)?.due);
     if (filterType !== 'all') list = list.filter(c => c.player_type === filterType);
     if (filterLocation !== 'all') list = list.filter(c => c.location === filterLocation);
     if (filterActive !== 'all') list = list.filter(c => (filterActive === 'active' ? c.is_active : !c.is_active));
@@ -149,7 +170,7 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
       (c.phone ?? '').includes(q) ||
       String(c.customer_number).includes(q)
     );
-  }, [customers, query, filterType, filterLocation, filterActive, filterAppt, allAppointments]);
+  }, [customers, query, filterType, filterLocation, filterActive, filterAppt, filterBilling, billingByPlayer, allAppointments]);
 
   // Bestätigte Termine je Spieler einmal zählen statt allAppointments pro
   // Kundenzeile (und pro Suchfeld-Tastendruck) komplett zu filtern.
@@ -385,6 +406,22 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
         ))}
       </View>
 
+      <View style={styles.filterRow}>
+        <Text style={styles.filterLabel}>Abrechng.</Text>
+        {([['all', 'Alle'], ['due', 'Abrechnung fällig']] as const).map(([id, label]) => (
+          <TouchableOpacity
+            key={id}
+            style={[styles.filterChip, filterBilling === id && styles.filterChipActive]}
+            onPress={() => setFilterBilling(id)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.filterChipText, filterBilling === id && styles.filterChipTextActive]}>
+              {label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       <View style={styles.searchWrap}>
         <TextInput
           style={styles.searchInput}
@@ -406,6 +443,7 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
         )}
         {filtered.map(c => {
           const apptCount = confirmedCountByPlayer.get(c.id) ?? 0;
+          const billing = billingByPlayer.get(c.id);
           const levelKey = c.level as PlayerLevel | null;
           const isTorwart = c.player_type === 'torwart';
           return (
@@ -443,6 +481,10 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
               <View style={styles.right}>
                 <Text style={styles.customerNr}>#{c.customer_number}</Text>
                 <Text style={styles.apptCount}>{apptCount} Termine</Text>
+                {/* Nur bei faelligen Kunden — sonst bleibt die Liste zahlenarm. */}
+                {billing?.due && (
+                  <Text style={styles.billingDue}>{billing.completed} Einheiten</Text>
+                )}
               </View>
               <Text style={styles.chevron}>›</Text>
             </TouchableOpacity>
@@ -495,6 +537,7 @@ const styles = StyleSheet.create({
   right: { alignItems: 'flex-end', gap: 3 },
   customerNr: { fontSize: 13, fontWeight: '700', color: '#4A8FE8' },
   apptCount: { fontSize: 12, color: '#7A90AE' },
+  billingDue: { fontSize: 11, fontWeight: '700', color: '#EF4444', backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, overflow: 'hidden' },
   chevron: { fontSize: 22, color: '#7A90AE', fontWeight: '300', marginLeft: 4 },
   newBtn: {
     marginHorizontal: 32, marginBottom: 16,

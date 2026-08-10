@@ -154,7 +154,7 @@ export function PermissionsSection({
         </View>
         <View style={styles.tokenDisplayItem}>
           <Text style={styles.tokenDisplayCount}>{confirmedTotal}</Text>
-          <Text style={styles.tokenDisplayLabel}>Termine gesamt</Text>
+          <Text style={styles.tokenDisplayLabel}>Termine bisher</Text>
         </View>
       </View>
 
