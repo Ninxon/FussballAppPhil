@@ -324,7 +324,10 @@ export function BuchenScreen({ slotCounts, slotPlayers, slotReservations = [], m
           blockedPeriods={blockedPeriods}
           myAppointments={myAppointments}
           onBack={() => setStep('program')}
-          onSelectDate={ds => { setSelDate(ds); setStep('time'); }}
+          // Slot-Auswahl gehört zum Datum: bleibt sie beim Datumswechsel stehen,
+          // ist „Weiter" sofort aktiv und der Kunde bucht den Slot des alten
+          // Tages, ohne ihn am neuen gesehen zu haben.
+          onSelectDate={ds => { setSelDate(ds); setSelTime(null); setSelLocation(null); setStep('time'); }}
         />
       )}
       {step === 'time' && (
