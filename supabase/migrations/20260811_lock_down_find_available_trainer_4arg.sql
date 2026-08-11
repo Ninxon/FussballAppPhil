@@ -1,0 +1,28 @@
+-- ============================================================
+-- find_available_trainer (4-arg): EXECUTE für authenticated entziehen
+-- ============================================================
+-- Bestandslücke: die 4-arg-Variante kam mit 20260527_location_aware_booking.sql
+-- als NEUE Signatur dazu und bekam dadurch die Supabase-Default-Privilegien.
+-- Die Sperre aus `lock_down_find_available_trainer` (2026-05) galt nur für die
+-- 3-arg-Signatur — in Postgres ist jede Signatur ein eigenes Objekt mit eigenen
+-- Rechten. Siehe 20260811_lock_down_find_available_trainer_5arg.sql, wo dasselbe
+-- Muster beim Stammplatz-Feature auffiel.
+--
+-- Warum das nichts bricht:
+--   * Aufrufer sind ausschließlich DB-intern — der 3-arg-Wrapper, und
+--     book_with_token nutzt seit dem Stammplatz-Feature die 5-arg-Variante.
+--     Alle drei sind SECURITY DEFINER und gehören postgres; beim Aufruf INNERHALB
+--     einer solchen Funktion zählt das Recht des Eigentümers, nicht das des
+--     angemeldeten Kunden.
+--   * Kein Client-Code ruft die Funktion (repo-weite Suche: null Treffer).
+--   * service_role behält EXECUTE — Edge Functions sind nicht betroffen.
+--
+-- Verifiziert nach dem Entzug: book_with_token als Rolle `authenticated` mit
+-- echtem Gutschein durchgelaufen und hat einen Trainer zugewiesen (Testlauf per
+-- RAISE EXCEPTION zurückgerollt, keine Datenänderung).
+--
+-- Rückgängig zu machen mit:
+--   GRANT EXECUTE ON FUNCTION public.find_available_trainer(date, time without time zone, text, text) TO authenticated;
+-- ============================================================
+
+REVOKE EXECUTE ON FUNCTION public.find_available_trainer(date, time without time zone, text, text) FROM authenticated;
