@@ -1105,6 +1105,7 @@ CREATE TABLE IF NOT EXISTS "public"."players" (
     "is_active" boolean DEFAULT true NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "individual_billed_since" "date" DEFAULT (("now"() AT TIME ZONE 'Europe/Berlin'::"text"))::"date" NOT NULL,
+    "individual_billing_adjust" integer DEFAULT 0 NOT NULL,
     CONSTRAINT "players_level_check" CHECK ((("level" IS NULL) OR ("level" = ANY (ARRAY['anfaenger'::"text", 'amateur'::"text", 'profi'::"text", 'experte'::"text"])))),
     CONSTRAINT "players_location_chk" CHECK ((("location" IS NULL) OR ("location" = ANY (ARRAY['Rüsselsheim'::"text", 'Kelsterbach'::"text", 'Groß-Gerau'::"text"])))),
     CONSTRAINT "players_player_type_check" CHECK ((("player_type" IS NULL) OR ("player_type" = ANY (ARRAY['torwart'::"text", 'feldspieler'::"text"]))))
@@ -1115,6 +1116,10 @@ ALTER TABLE "public"."players" OWNER TO "postgres";
 
 
 COMMENT ON COLUMN "public"."players"."individual_billed_since" IS 'Stichtag der letzten Einzeltraining-Abrechnung. Einheiten ab diesem Datum zaehlen in den laufenden 4er-Block (individual + torhueter_individual). Merkhilfe fuer den Admin, keine Buchungssperre.';
+
+
+
+COMMENT ON COLUMN "public"."players"."individual_billing_adjust" IS 'Manuelle Korrektur des laufenden Einzeltraining-Blocks (+/-). Wird auf die aus den Terminen abgeleiteten Einheiten addiert; die Summe wird bei 0 abgefangen. Gilt nur fuer den laufenden Block und wird mit individual_billed_since zurueckgesetzt.';
 
 
 

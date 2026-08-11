@@ -18,7 +18,7 @@ type BillableAppointment = {
 };
 
 export type IndividualBillingStatus = {
-  /** Bereits stattgefunden und abrechenbar — zaehlt gegen den 4er-Block. */
+  /** Abrechenbare Einheiten des laufenden Blocks, inkl. manueller Korrektur. */
   completed: number;
   /** Gebucht, aber noch nicht stattgefunden — nur informativ. */
   upcoming: number;
@@ -36,11 +36,17 @@ export type IndividualBillingStatus = {
  * Nachholtermin-Gutschein.
  *
  * `appointments` muss bereits auf einen Spieler gefiltert sein.
+ *
+ * `adjust` ist die manuelle Korrektur des Admins fuer Spezialfaelle (Einheit
+ * ausserhalb der App gehalten, Kulanz). Sie verschiebt nur das Ergebnis — die
+ * Termine bleiben die Quelle, neue zaehlen also auch nach einer Korrektur
+ * weiter mit. Negativ unter 0 gedrueckt wird nicht: "-1 / 4" waere sinnlos.
  */
 export function individualBillingStatus(
   appointments: BillableAppointment[],
   billedSince: string | null | undefined,
   todayStr: string,
+  adjust = 0,
 ): IndividualBillingStatus {
   let completed = 0;
   let upcoming = 0;
@@ -64,5 +70,6 @@ export function individualBillingStatus(
     if (billable) completed++;
   }
 
-  return { completed, upcoming, due: completed >= INDIVIDUAL_BILLING_BLOCK };
+  const total = Math.max(0, completed + adjust);
+  return { completed: total, upcoming, due: total >= INDIVIDUAL_BILLING_BLOCK };
 }

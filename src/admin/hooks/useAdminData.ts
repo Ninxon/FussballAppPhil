@@ -39,6 +39,8 @@ export type CustomerProfile = {
   skip_group_age_level_check: boolean;
   // Stichtag der letzten Einzeltraining-Abrechnung ('YYYY-MM-DD').
   individual_billed_since: string;
+  // Manuelle Korrektur des laufenden 4er-Blocks (+/-), 0 = keine.
+  individual_billing_adjust: number;
 } & BookingPermissions;
 
 export type AdminAppointment = {
@@ -192,11 +194,33 @@ export function useAdminData() {
   // "Ist bezahlt": setzt den Abrechnungs-Stichtag der Einzeltrainings auf heute,
   // der 4er-Zähler startet damit wieder bei 0. Reine Merkhilfe — Buchungen und
   // Gutscheine bleiben davon unberührt.
+  //
+  // Die manuelle Korrektur gehört zum abgerechneten Block und geht mit auf 0:
+  // bliebe sie stehen, würde sie in jedem weiteren Block erneut mitzählen.
   const markIndividualBilled = async (customerId: string): Promise<MutationResult> => {
     const since = todayStr();
-    const { error } = await PlayerService.update(customerId, { individual_billed_since: since });
+    const { error } = await PlayerService.update(customerId, {
+      individual_billed_since: since,
+      individual_billing_adjust: 0,
+    });
     if (error) return { error: msg(error, 'Fehler beim Speichern.') };
-    setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, individual_billed_since: since } : c));
+    setCustomers(prev => prev.map(c => c.id === customerId
+      ? { ...c, individual_billed_since: since, individual_billing_adjust: 0 }
+      : c));
+    return { error: null };
+  };
+
+  // Manuelle Korrektur des laufenden Blocks für Spezialfälle (Einheit außerhalb
+  // der App gehalten, Kulanz). Verschiebt nur den abgeleiteten Stand — Termine
+  // zählen weiterhin automatisch mit. Die untere Grenze setzt die UI: sie kennt
+  // den abgeleiteten Stand und lässt "−" nicht unter 0 zu.
+  const adjustIndividualBilling = async (customerId: string, delta: number): Promise<MutationResult> => {
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) return { error: 'Kunde nicht gefunden.' };
+    const next = customer.individual_billing_adjust + delta;
+    const { error } = await PlayerService.update(customerId, { individual_billing_adjust: next });
+    if (error) return { error: msg(error, 'Fehler beim Speichern.') };
+    setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, individual_billing_adjust: next } : c));
     return { error: null };
   };
 
@@ -485,7 +509,7 @@ export function useAdminData() {
     saveCustomerLevel, saveBookingPermissions, saveCustomerProfile, saveGroupCompatExempt,
     saveCustomerEmail, toggleCustomerActive, resetCustomerTokens, grantCustomerToken,
     setScheduleSlot, createTrainer, updateTrainer, deleteTrainer,
-    markIndividualBilled,
+    markIndividualBilled, adjustIndividualBilling,
     reload: load,
   };
 }

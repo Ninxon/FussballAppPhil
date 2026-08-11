@@ -34,6 +34,7 @@ interface Props {
   onResetTokens: (customerId: string) => Promise<MutationResult>;
   onGrantToken: (customerId: string, category: 'individual' | 'gruppe', expiresDate: string) => Promise<MutationResult>;
   onMarkIndividualBilled: (customerId: string) => Promise<MutationResult>;
+  onAdjustIndividualBilling: (customerId: string, delta: number) => Promise<MutationResult>;
   onDeleteCustomer: (id: string) => Promise<MutationResult>;
 }
 
@@ -45,7 +46,8 @@ export function KundenDetailScreen({
   onBack, onCancelAppointment, onAddAppointment, onAddRecurring,
   onAddReservation, onRemoveReservation,
   onSaveLevel, onSaveBookingPermissions, onSaveGroupExempt, onSaveProfile, onSaveEmail,
-  onToggleActive, onResetTokens, onGrantToken, onMarkIndividualBilled, onDeleteCustomer,
+  onToggleActive, onResetTokens, onGrantToken, onMarkIndividualBilled,
+  onAdjustIndividualBilling, onDeleteCustomer,
 }: Props) {
   const ts = todayStr();
 
@@ -92,8 +94,10 @@ export function KundenDetailScreen({
         customerId={customer.id}
         appointments={appointments}
         billedSince={customer.individual_billed_since}
+        adjust={customer.individual_billing_adjust}
         todayStr={ts}
         onMarkIndividualBilled={onMarkIndividualBilled}
+        onAdjustIndividualBilling={onAdjustIndividualBilling}
       />
 
       <StammplatzSection

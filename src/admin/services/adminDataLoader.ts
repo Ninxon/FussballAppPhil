@@ -62,6 +62,7 @@ export async function fetchAdminData(): Promise<AdminDataSnapshot> {
     level: pl.level ?? null,
     skip_group_age_level_check: pl.skip_group_age_level_check ?? false,
     individual_billed_since: pl.individual_billed_since,
+    individual_billing_adjust: pl.individual_billing_adjust ?? 0,
     can_book_individual: pl.can_book_individual,
     can_book_gruppe: pl.can_book_gruppe,
     can_book_athletik: pl.can_book_athletik,

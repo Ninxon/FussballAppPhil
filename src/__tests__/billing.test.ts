@@ -118,6 +118,38 @@ describe('individualBillingStatus – Zukunft', () => {
   });
 });
 
+describe('individualBillingStatus – manuelle Korrektur', () => {
+  it('addiert die Korrektur auf die abgeleiteten Einheiten', () => {
+    const res = individualBillingStatus([appt('2026-07-15')], SINCE, TODAY, 2);
+    expect(res.completed).toBe(3);
+  });
+
+  it('zieht negativ ab', () => {
+    const res = individualBillingStatus(
+      [appt('2026-07-15'), appt('2026-07-16')], SINCE, TODAY, -1,
+    );
+    expect(res.completed).toBe(1);
+  });
+
+  it('faengt den Zaehler bei 0 ab statt negativ zu werden', () => {
+    const res = individualBillingStatus([appt('2026-07-15')], SINCE, TODAY, -5);
+    expect(res.completed).toBe(0);
+    expect(res.due).toBe(false);
+  });
+
+  it('laesst die Zukunftstermine unberuehrt', () => {
+    const res = individualBillingStatus([appt('2026-09-01')], SINCE, TODAY, 3);
+    expect(res.completed).toBe(3);
+    expect(res.upcoming).toBe(1);
+  });
+
+  it('ohne Korrektur bleibt alles wie zuvor', () => {
+    const appts = [appt('2026-07-15'), appt('2026-07-16')];
+    expect(individualBillingStatus(appts, SINCE, TODAY, 0))
+      .toEqual(individualBillingStatus(appts, SINCE, TODAY));
+  });
+});
+
 describe('individualBillingStatus – Faelligkeit', () => {
   const past = (n: number) =>
     Array.from({ length: n }, (_, i) => appt(`2026-07-${String(i + 1).padStart(2, '0')}`));
@@ -131,6 +163,10 @@ describe('individualBillingStatus – Faelligkeit', () => {
     const res = individualBillingStatus(past(6), SINCE, TODAY);
     expect(res.completed).toBe(6);
     expect(res.due).toBe(true);
+  });
+
+  it('macht eine manuelle Korrektur faellig', () => {
+    expect(individualBillingStatus(past(3), SINCE, TODAY, 1).due).toBe(true);
   });
 
   it('leere Terminliste ergibt 0 und nicht faellig', () => {

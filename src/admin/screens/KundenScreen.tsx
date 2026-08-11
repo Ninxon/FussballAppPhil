@@ -142,7 +142,9 @@ export function KundenScreen({ customers, allAppointments, loading, onSelectCust
     }
     const map = new Map<string, IndividualBillingStatus>();
     for (const c of customers) {
-      map.set(c.id, individualBillingStatus(apptsByPlayer.get(c.id) ?? [], c.individual_billed_since, ts));
+      map.set(c.id, individualBillingStatus(
+        apptsByPlayer.get(c.id) ?? [], c.individual_billed_since, ts, c.individual_billing_adjust,
+      ));
     }
     return map;
   }, [customers, allAppointments]);
